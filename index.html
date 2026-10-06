@@ -17,6 +17,7 @@
   .btn:hover{background:var(--border)}
   .btn-accent{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
   .btn-accent:hover{background:var(--accent2)}
+  .btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
   .main{display:flex;flex:1;overflow:hidden}
   .sidebar{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
   .panel{padding:14px;border-bottom:1px solid var(--border)}
@@ -39,14 +40,6 @@
   .slider-value{font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--accent)}
   input[type="range"]{-webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:var(--surface2);outline:none}
   input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--bg)}
-  .color-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-  .color-swatch{width:24px;height:24px;border-radius:5px;cursor:pointer;border:2px solid transparent;transition:all 0.2s}
-  .color-swatch.active{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
-  .color-swatch:hover{transform:scale(1.15)}
-  .sym-options{display:flex;gap:5px;margin-top:6px}
-  .sym-btn{flex:1;padding:6px 3px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:10px;font-family:inherit;font-weight:500;cursor:pointer;text-align:center;transition:all 0.2s}
-  .sym-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
-  .sym-btn:hover:not(.active){background:var(--border)}
 
   /* Canvas area - dual view */
   .canvas-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -64,9 +57,6 @@
   .view-canvas{flex:1;overflow:hidden;cursor:crosshair;touch-action:none;background:#ffffff}
   .view-canvas svg{width:100%;height:100%;touch-action:none}
 
-  .grid-line{stroke:#000000;stroke-width:0.5;opacity:0.12}
-  .grid-line-major{stroke:#000000;stroke-width:1;opacity:0.3}
-  .symmetry-line{stroke-width:1;stroke-dasharray:6,4;opacity:0.4}
   .control-point{cursor:grab}
 
   .status-bar{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:var(--surface);border-top:1px solid var(--border);font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim)}
@@ -135,7 +125,7 @@
   </div>
   <div class="header-actions">
     <div style="position:relative;display:inline-block" id="syncWrap">
-      <button class="btn" onclick="document.getElementById('syncMenu').style.display=document.getElementById('syncMenu').style.display==='block'?'none':'block'">📐 <span class="btn-label">크기맞춤</span></button>
+      <button class="btn" onclick="toggleSyncMenu()">📐 <span class="btn-label">크기맞춤</span></button>
       <div id="syncMenu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:140px;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
         <button class="btn" style="width:100%;justify-content:center;margin-bottom:4px" onclick="syncToSide();document.getElementById('syncMenu').style.display='none'">측면 기준 맞춤</button>
         <button class="btn" style="width:100%;justify-content:center" onclick="syncToTop();document.getElementById('syncMenu').style.display='none'">상면 기준 맞춤</button>
@@ -163,17 +153,17 @@
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">대칭 모드</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="render()"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle()"><span class="toggle-slider"></span></label></div>
       </div>
     </div>
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">바디 형태</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">측면 포인트 수</span><span class="slider-value" id="sidePtsVal">16</span></div>
-        <input type="range" min="8" max="32" value="16" id="sidePtsSlider" onchange="changeSidePts(this.value)" oninput="document.getElementById('sidePtsVal').textContent=this.value"></div>
-      <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">12</span></div>
-        <input type="range" min="8" max="32" value="12" id="topPtsSlider" onchange="changeTopPts(this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
+        <input type="range" min="8" max="32" value="16" id="sidePtsSlider" onchange="changePts('side',this.value)" oninput="document.getElementById('sidePtsVal').textContent=this.value"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">16</span></div>
+        <input type="range" min="8" max="32" value="16" id="topPtsSlider" onchange="changePts('top',this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">0.30</span></div>
         <input type="range" min="0" max="100" value="30" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
@@ -281,7 +271,7 @@
         <div class="view-canvas" id="topCont"><svg id="topSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
     </div>
-    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">측면: 16pt | 상면: 12pt</span></div>
+    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">측면: 16pt | 상면: 16pt</span></div>
   </div>
 </div>
 
@@ -293,14 +283,14 @@
       <button class="btn" onclick="closeAnimation()">✕ 닫기</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn" id="animPlayBtn" onclick="animPlay()">▶ 재생</button>
+      <button class="btn" id="animPlayBtn" onclick="animTogglePlay()">▶ 재생</button>
       <button class="btn" onclick="animStop()">⏹ 정지</button>
       <span style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px">뷰:</span>
-      <button class="btn anim-view-btn active" onclick="setAnimView('side')">측면</button>
-      <button class="btn anim-view-btn" onclick="setAnimView('top')">상면</button>
+      <button class="btn anim-view-btn active" onclick="setAnimView('side',this)">측면</button>
+      <button class="btn anim-view-btn" onclick="setAnimView('top',this)">상면</button>
     </div>
     <canvas id="animCanvas" width="680" height="360" style="width:100%;background:#0c1829;border-radius:8px;border:1px solid var(--border)"></canvas>
-    <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center" id="animInfo">리트리브 시 예상 움직임 패턴</div>
+    <div style="font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center" id="animInfo">리트리브 시 예상 움직임 패턴</div>
   </div>
 </div>
 
@@ -308,7 +298,7 @@
   <div class="export-dialog">
     <h3>SVG 내보내기</h3>
     <textarea id="exportContent" readonly></textarea>
-    <button class="btn btn-accent" onclick="navigator.clipboard.writeText(document.getElementById('exportContent').value)">📋 복사</button>
+    <button class="btn btn-accent" onclick="copyExport(this)">📋 복사</button>
     <button class="btn" onclick="dlSVG()" style="margin-top:8px">⬇ 파일 저장</button>
     <button class="btn" onclick="document.getElementById('exportOverlay').style.display='none'" style="margin-top:8px">닫기</button>
   </div>
@@ -318,13 +308,22 @@
 // === DATA ===
 // Side view: points as {x, y} where x=length axis, y=height
 // Top view: points as {x, y} where x=length axis (shared!), y=width
+// Point layout: pts[0] and pts[n-1] are both the nose. With symmetry on,
+// indices 1..half-1 are mirrored onto n-2..n-half (y negated) and the
+// mirrored half is written back into the array, so the stored points
+// always match what is displayed, exported and used for physics.
 let sidePts = [], topPts = [];
-let SM = 0.3, SW = 1, FC = '#ffffff', SC = '#000000';
+let SM = 0.3, SW = 1;
+const FC = '#ffffff', SC = '#000000';
+const MIN_PTS = 8, MAX_PTS = 32; // same as the point-count sliders
+const HAS_TOUCH = ('ontouchstart' in window);
 let tool = 'move';
 let viewZoom = 1.4; // unified zoom
+// pan.x is kept identical in both views so the length axis stays linked
 let sidePan = {x:0,y:0}, topPan = {x:0,y:0};
-let history = [];
+let undoStack = [];
 const MAX_HIST = 40;
+let lastSaveKey = null, lastSaveT = 0;
 
 // Drag state
 let dragView = null; // 'side' or 'top'
@@ -332,10 +331,11 @@ let dragIdx = null;
 let dragType = null; // 'point' or 'part'
 let dragPartType = null; // 'eye','hook','lineEye'
 let dragPartIdx = null;
+let layoutNoseX = null; // nose X frozen during a drag so the view doesn't shift under the pointer
 let isPan = false, panRef = {x:0,y:0}, panTarget = null;
 let isTouch = false; // true when using touch input
 
-// Parts: each has {x,y} in local coords (same as body points)
+// Parts: each has {x,y} in side-view coords
 let eyes = [];
 let hooks = [];
 let lineEyes = [];
@@ -355,9 +355,6 @@ function defSide() {
   ];
 }
 function defTop() {
-  return defTopFull();
-}
-function defTopFull() {
   // 16 pts: same structure as side — nose at 0&15, tail region at 7&8
   return [
     {x:65,y:0},                                          // 0: nose
@@ -371,8 +368,9 @@ function defTopFull() {
 
 function init() {
   sidePts = defSide();
-  topPts = defTopFull();
+  topPts = defTop();
   setupEvents();
+  updatePtsSliders();
   syncSlidersFromPoints();
   updatePartCounts();
   render();
@@ -385,15 +383,42 @@ function toggleSidebar() {
   ov.classList.toggle('open');
 }
 
+// === HELPERS ===
+function xRange(pts) { let mn=Infinity,mx=-Infinity; for(const p of pts){if(p.x<mn)mn=p.x;if(p.x>mx)mx=p.x;} return {mn,mx}; }
+function yRange(pts) { let mn=Infinity,mx=-Infinity; for(const p of pts){if(p.y<mn)mn=p.y;if(p.y>mx)mx=p.y;} return {mn,mx}; }
+function viewPts(view) { return view==='side'?sidePts:topPts; }
+function symOn(view) { return document.getElementById(view==='side'?'symSide':'symTop').checked; }
+// Apply f to every X of a view. Parts live in side-view coords, so they move with the side body.
+function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.x=f(p.x))); }
 
-function saveH() { history.push({s:JSON.parse(JSON.stringify(sidePts)),t:JSON.parse(JSON.stringify(topPts)),e:JSON.parse(JSON.stringify(eyes)),h:JSON.parse(JSON.stringify(hooks)),l:JSON.parse(JSON.stringify(lineEyes))}); if(history.length>MAX_HIST)history.shift(); }
-function undoAction() { if(history.length){const h=history.pop(); sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; selectedPart=null; updatePartCounts(); syncSlidersFromPoints(); render();} }
-function resetShape() { saveH(); sidePts=defSide(); topPts=defTopFull(); const dp=getDefaultParts(); eyes=dp.eyes; hooks=dp.hooks; lineEyes=dp.lineEyes; selectedPart=null; updatePartCounts(); syncSlidersFromPoints(); render(); }
+// === HISTORY ===
+function saveH() {
+  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes})));
+  if(undoStack.length>MAX_HIST) undoStack.shift();
+  lastSaveKey=null;
+}
+// One undo step per continuous slider drag instead of one per input event
+function saveHGrouped(key) {
+  const now=Date.now();
+  if(key!==lastSaveKey||now-lastSaveT>800) saveH();
+  lastSaveKey=key; lastSaveT=now;
+}
+function afterStateReplaced() { selectedPart=null; updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render(); }
+function undoAction() { if(!undoStack.length)return; const h=undoStack.pop(); sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; afterStateReplaced(); }
+function resetShape() { saveH(); sidePts=defSide(); topPts=defTop(); eyes=[]; hooks=[]; lineEyes=[]; afterStateReplaced(); }
 
 function setTool(t) { tool=t; document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); const e=document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1)); if(e)e.classList.add('active'); }
 
-function zoomAll(f) { viewZoom=Math.max(0.3,Math.min(8,viewZoom*f)); render(); }
-function resetView() { viewZoom=1.4; sidePan={x:0,y:0}; topPan={x:0,y:0}; render(); }
+function zoomAll(f) { viewZoom=Math.max(0.3,Math.min(8,viewZoom*f)); render(true); }
+function resetView() { viewZoom=1.4; sidePan={x:0,y:0}; topPan={x:0,y:0}; render(true); }
+
+function updatePtsSliders() {
+  ['side','top'].forEach(v=>{
+    const n=viewPts(v).length;
+    document.getElementById(v+'PtsSlider').value=n;
+    document.getElementById(v+'PtsVal').textContent=n;
+  });
+}
 
 // Resample
 function resample(old, nc) {
@@ -409,12 +434,10 @@ function resample(old, nc) {
   const tot=ds[segCount];
   if(tot<0.001) return old.map(p=>({...p}));
   const pts=[];
+  let seg=0;
   for(let i=0;i<nc;i++){
     const td=(i/(nc-1))*tot; // nc-1 so first=start, last=end
-    // find segment
-    let seg=segCount-1;
-    for(let j=1;j<=segCount;j++){if(ds[j]>=td-0.0001){seg=j-1;break;}}
-    seg=Math.min(seg, segCount-1);
+    while(seg<segCount-1 && ds[seg+1]<td) seg++;
     const sl=ds[seg+1]-ds[seg];
     const t=sl>0?(td-ds[seg])/sl:0;
     const a=old[seg],b=old[seg+1];
@@ -423,38 +446,41 @@ function resample(old, nc) {
   return pts;
 }
 
-function changeSidePts(n) { n=parseInt(n); if(n===sidePts.length)return; saveH(); sidePts=resample(sidePts,n); forceSyncLength(); render(); }
-function changeTopPts(n) { n=parseInt(n); if(n===topPts.length)return; saveH(); topPts=resample(topPts,n); forceSyncLength(); render(); }
+function changePts(view, n) {
+  n=parseInt(n); if(n===viewPts(view).length)return;
+  saveH();
+  if(view==='side') sidePts=resample(sidePts,n); else topPts=resample(topPts,n);
+  applySym(); syncSlidersFromPoints(); render();
+}
 
 function scaleLengthAll(v) {
   v=parseInt(v); document.getElementById('lenVal').textContent=v;
-  function scaleX(pts) {
-    let mn=Infinity,mx=-Infinity; pts.forEach(p=>{mn=Math.min(mn,p.x);mx=Math.max(mx,p.x);});
+  saveHGrouped('len');
+  ['side','top'].forEach(view=>{
+    const {mn,mx}=xRange(viewPts(view));
     const cur=mx-mn; if(cur<1)return;
     const sc=v/cur;
     // Anchor at nose (max X)
-    pts.forEach(p=>p.x=mx+(p.x-mx)*sc);
-  }
-  saveH(); scaleX(sidePts); scaleX(topPts); updateSizeInfo(); render();
+    mapX(view,x=>mx+(x-mx)*sc);
+  });
+  updateSizeInfo(); render();
 }
 
 function scaleSideHeight(v) {
   v=parseInt(v); document.getElementById('sideHVal').textContent=v;
-  let mn=Infinity,mx=-Infinity;
-  sidePts.forEach(p=>{mn=Math.min(mn,p.y);mx=Math.max(mx,p.y);});
+  const {mn,mx}=yRange(sidePts);
   const cur=mx-mn; if(cur<1)return;
-  const sc=v/cur; saveH();
-  sidePts.forEach(p=>p.y=p.y*sc);
+  const sc=v/cur; saveHGrouped('sideH');
+  [sidePts,eyes,hooks,lineEyes].forEach(a=>a.forEach(p=>p.y*=sc));
   updateSizeInfo(); render();
 }
 
 function scaleTopWidth(v) {
   v=parseInt(v); document.getElementById('topWVal').textContent=v;
-  let mn=Infinity,mx=-Infinity;
-  topPts.forEach(p=>{mn=Math.min(mn,p.y);mx=Math.max(mx,p.y);});
+  const {mn,mx}=yRange(topPts);
   const cur=mx-mn; if(cur<1)return;
-  const sc=v/cur; saveH();
-  topPts.forEach(p=>p.y=p.y*sc);
+  const sc=v/cur; saveHGrouped('topW');
+  topPts.forEach(p=>p.y*=sc);
   updateSizeInfo(); render();
 }
 
@@ -465,97 +491,44 @@ function updateSizeInfo() {
   document.getElementById('sizeInfo').textContent=l+' × '+h+' × '+w+' mm';
 }
 
-// Force both views to have identical X range (length)
+// Force both views to have identical X range (length):
+// scale the shorter one to match (anchored at its nose), then align the noses
 function forceSyncLength() {
-  let smnx=Infinity,smxx=-Infinity;
-  sidePts.forEach(p=>{smnx=Math.min(smnx,p.x);smxx=Math.max(smxx,p.x);});
-  let tmnx=Infinity,tmxx=-Infinity;
-  topPts.forEach(p=>{tmnx=Math.min(tmnx,p.x);tmxx=Math.max(tmxx,p.x);});
-  const sideLen=smxx-smnx, topLen=tmxx-tmnx;
+  const s=xRange(sidePts), t=xRange(topPts);
+  const sideLen=s.mx-s.mn, topLen=t.mx-t.mn;
   if(sideLen<1||topLen<1) return;
-  // Scale shorter to match longer, anchored at nose
-  const target=Math.max(sideLen,topLen);
-  if(sideLen<target){
-    const sc=target/sideLen;
-    sidePts.forEach(p=>p.x=smxx+(p.x-smxx)*sc);
-  }
-  if(topLen<target){
-    const sc=target/topLen;
-    topPts.forEach(p=>p.x=tmxx+(p.x-tmxx)*sc);
-  }
-  // Align nose X: shift so both max X are equal
-  let smxx2=-Infinity, tmxx2=-Infinity;
-  sidePts.forEach(p=>{smxx2=Math.max(smxx2,p.x);});
-  topPts.forEach(p=>{tmxx2=Math.max(tmxx2,p.x);});
-  const noseTarget=Math.max(smxx2,tmxx2);
-  if(Math.abs(smxx2-noseTarget)>0.01) sidePts.forEach(p=>p.x+=(noseTarget-smxx2));
-  if(Math.abs(tmxx2-noseTarget)>0.01) topPts.forEach(p=>p.x+=(noseTarget-tmxx2));
+  const target=Math.max(sideLen,topLen), nose=Math.max(s.mx,t.mx);
+  if(Math.abs(sideLen-target)>0.01||Math.abs(s.mx-nose)>0.01) mapX('side',x=>nose+(x-s.mx)*target/sideLen);
+  if(Math.abs(topLen-target)>0.01||Math.abs(t.mx-nose)>0.01) mapX('top',x=>nose+(x-t.mx)*target/topLen);
 }
 
-// Sync to side: scale top X range to match side, then align nose X
-function syncToSide() {
-  saveH();
-  let smxx=-Infinity;
-  sidePts.forEach(p=>{smxx=Math.max(smxx,p.x);});
-  let tmnx=Infinity,tmxx=-Infinity;
-  topPts.forEach(p=>{tmnx=Math.min(tmnx,p.x);tmxx=Math.max(tmxx,p.x);});
-  const sideLen=smxx-Math.min(...sidePts.map(p=>p.x)), topLen=tmxx-tmnx;
-  if(topLen<1||sideLen<1) return;
-  const sc=sideLen/topLen;
-  // Scale anchored at nose
-  topPts.forEach(p=>p.x=tmxx+(p.x-tmxx)*sc);
-  // Align nose: shift top so nose X matches side nose X
-  const shift=smxx-tmxx;
-  topPts.forEach(p=>p.x+=shift);
-  syncSlidersFromPoints(); render();
+// Map one view's X range exactly onto the other's
+function matchXRange(view, ref) {
+  const r=xRange(viewPts(ref)), v=xRange(viewPts(view));
+  const refLen=r.mx-r.mn, len=v.mx-v.mn;
+  if(refLen<1||len<1) return false;
+  mapX(view,x=>r.mx+(x-v.mx)*refLen/len);
+  return true;
 }
-
-// Sync to top: scale side X range to match top, then align nose X
-function syncToTop() {
-  saveH();
-  let tmxx=-Infinity;
-  topPts.forEach(p=>{tmxx=Math.max(tmxx,p.x);});
-  let smnx=Infinity,smxx=-Infinity;
-  sidePts.forEach(p=>{smnx=Math.min(smnx,p.x);smxx=Math.max(smxx,p.x);});
-  const sideLen=smxx-smnx, topLen=tmxx-Math.min(...topPts.map(p=>p.x));
-  if(topLen<1||sideLen<1) return;
-  const sc=topLen/sideLen;
-  // Scale anchored at nose
-  sidePts.forEach(p=>p.x=smxx+(p.x-smxx)*sc);
-  // Align nose: shift side so nose X matches top nose X
-  const shift=tmxx-smxx;
-  sidePts.forEach(p=>p.x+=shift);
-  syncSlidersFromPoints(); render();
-}
+// Sync to side: scale top X range to match side, nose aligned
+function syncToSide() { saveH(); if(!matchXRange('top','side')){undoStack.pop();return;} syncSlidersFromPoints(); render(); }
+// Sync to top: scale side X range to match top, nose aligned
+function syncToTop() { saveH(); if(!matchXRange('side','top')){undoStack.pop();return;} syncSlidersFromPoints(); render(); }
 
 function syncSlidersFromPoints() {
   forceSyncLength();
-  // Sync length slider from side points X range
-  let smnx=Infinity,smxx=-Infinity;
-  sidePts.forEach(p=>{smnx=Math.min(smnx,p.x);smxx=Math.max(smxx,p.x);});
-  const curLen=Math.round(smxx-smnx);
-  document.getElementById('lenSlider').value=curLen;
-  document.getElementById('lenVal').textContent=curLen;
-  // Sync side height
-  let smny=Infinity,smxy=-Infinity;
-  sidePts.forEach(p=>{smny=Math.min(smny,p.y);smxy=Math.max(smxy,p.y);});
-  const curH=Math.round(smxy-smny);
-  document.getElementById('sideHSlider').value=curH;
-  document.getElementById('sideHVal').textContent=curH;
-  // Sync top width
-  let tmny=Infinity,tmxy=-Infinity;
-  topPts.forEach(p=>{tmny=Math.min(tmny,p.y);tmxy=Math.max(tmxy,p.y);});
-  const curW=Math.round(tmxy-tmny);
-  document.getElementById('topWSlider').value=curW;
-  document.getElementById('topWVal').textContent=curW;
+  const sx=xRange(sidePts), sy=yRange(sidePts), ty=yRange(topPts);
+  const set=(id,v)=>{v=Math.round(v);document.getElementById(id+'Slider').value=v;document.getElementById(id+'Val').textContent=v;};
+  set('len',sx.mx-sx.mn);
+  set('sideH',sy.mx-sy.mn);
+  set('topW',ty.mx-ty.mn);
   updateSizeInfo();
 }
 
 // === PARTS MANAGEMENT ===
 function addPart(type) {
   saveH();
-  let mnx=Infinity,mxx=-Infinity,mxy=-Infinity;
-  sidePts.forEach(p=>{mnx=Math.min(mnx,p.x);mxx=Math.max(mxx,p.x);mxy=Math.max(mxy,p.y);});
+  const {mn:mnx,mx:mxx}=xRange(sidePts), mxy=yRange(sidePts).mx;
   if(type==='eye') {
     // Place near front of body
     eyes.push({x:mxx*0.5, y:-3});
@@ -566,7 +539,7 @@ function addPart(type) {
     lineEyes.push({x:mxx+5, y:0});
   }
   updatePartCounts();
-  render();
+  render(true);
 }
 
 function removePart(type) {
@@ -576,7 +549,7 @@ function removePart(type) {
   else if(type==='lineEye' && lineEyes.length>0) lineEyes.pop();
   selectedPart=null;
   updatePartCounts();
-  render();
+  render(true);
 }
 
 function updatePartCounts() {
@@ -585,114 +558,132 @@ function updatePartCounts() {
   document.getElementById('lineEyeCount').textContent=lineEyes.length;
 }
 
-function getDefaultParts() {
-  return { eyes: [], hooks: [], lineEyes: [] };
-}
-
-// Mirror: pts[0]=pts[n-1]=nose. Upper: 1..half-1, Lower: half..n-2
-function mirror(pts, sym) {
-  if(!sym) return pts.map(p=>({...p}));
-  const out=pts.map(p=>({...p}));
-  const n=out.length;
-  const half=Math.floor(n/2);
-  // Mirror upper (1..half-1) to lower (n-2..half)
-  // i=1 → mi=n-1-1=n-2
-  // i=half-1 → mi=n-1-(half-1)=n-half=half (for n=16: mi=8)
-  for(let i=1;i<half;i++){
-    const mi=n-1-i;
-    out[mi].x=out[i].x;
-    out[mi].y=-out[i].y;
+// === SYMMETRY ===
+// Mirror upper (1..half-1) onto lower (n-2..n-half) in place and keep the duplicated nose in sync
+function applySymTo(pts, sym) {
+  const n=pts.length; if(n<2) return;
+  if(sym){
+    const half=Math.floor(n/2);
+    for(let i=1;i<half;i++){ const m=n-1-i; pts[m].x=pts[i].x; pts[m].y=-pts[i].y; }
   }
-  // Keep nose start/end synced
-  out[n-1].x=out[0].x;
-  out[n-1].y=out[0].y;
-  return out;
+  pts[n-1].x=pts[0].x; pts[n-1].y=pts[0].y;
 }
-function isEditable(n, idx, sym) {
-  if(!sym) return true;
-  const half=Math.floor(n/2);
-  return idx <= half;
-}
+function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
+function onSymToggle() { saveH(); applySym(); syncSlidersFromPoints(); render(); }
+// Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
+function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
+function isEditable(n, idx, sym) { return idx < editableCount(n,sym); }
 
 // Smooth path
+const r2=v=>Math.round(v*100)/100;
 function smoothPath(pts, sm) {
   const n=pts.length; if(n<3)return '';
   let d='';
   for(let i=0;i<n;i++){
     const p0=pts[(i-1+n)%n],p1=pts[i],p2=pts[(i+1)%n],p3=pts[(i+2)%n];
-    if(i===0)d+='M '+p1.x+' '+p1.y+' ';
-    d+='C '+(p1.x+(p2.x-p0.x)*sm)+' '+(p1.y+(p2.y-p0.y)*sm)+', '+(p2.x-(p3.x-p1.x)*sm)+' '+(p2.y-(p3.y-p1.y)*sm)+', '+p2.x+' '+p2.y+' ';
+    if(i===0)d+='M '+r2(p1.x)+' '+r2(p1.y)+' ';
+    d+='C '+r2(p1.x+(p2.x-p0.x)*sm)+' '+r2(p1.y+(p2.y-p0.y)*sm)+', '+r2(p2.x-(p3.x-p1.x)*sm)+' '+r2(p2.y-(p3.y-p1.y)*sm)+', '+r2(p2.x)+' '+r2(p2.y)+' ';
   }
   return d+'Z';
 }
 
-function lighten(hex,pct){const n=parseInt(hex.replace('#',''),16);return 'rgb('+Math.min(255,((n>>16)&0xff)+pct)+','+Math.min(255,((n>>8)&0xff)+pct)+','+Math.min(255,(n&0xff)+pct)+')';}
+// Lip outline: root at (nx,ny), length ll, angle la (rad), root half-width lw.
+// hull = the path's anchor/control points (bounds the curve, used for export sizing)
+function lipGeom(nx, ny, ll, la, lw) {
+  const ex=nx+Math.cos(la)*ll, ey=ny+Math.sin(la)*ll;
+  const px=-Math.sin(la), py=Math.cos(la);
+  const mx=(nx+ex)/2, my=(ny+ey)/2;
+  const P=(x,y,k)=>({x:x+px*lw*k, y:y+py*lw*k});
+  const hull=[P(nx,ny,1),P(mx,my,0.8),P(ex,ey,0.3),P(ex,ey,-0.3),P(mx,my,-0.8),P(nx,ny,-1)];
+  const s=p=>r2(p.x)+' '+r2(p.y);
+  return { hull, d:'M '+s(hull[0])+' Q '+s(hull[1])+', '+s(hull[2])+' L '+s(hull[3])+' Q '+s(hull[4])+', '+s(hull[5])+' Z' };
+}
+function lipParams() {
+  return { on:document.getElementById('lipToggle').checked,
+    len:parseInt(document.getElementById('lipLenSlider').value),
+    ang:parseInt(document.getElementById('lipAngSlider').value) };
+}
+
+// Eyes, hook eyes and line eyes (side view). interactive=true adds hit-test attrs and selection highlight.
+function partsMarkup(cx, cy, zoom, interactive) {
+  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value)*zoom;
+  const hookR=parseFloat(document.getElementById('hookSizeSlider').value)*zoom;
+  const isSel=(t,i)=>interactive&&selectedPart&&selectedPart.type===t&&selectedPart.idx===i;
+  const hit=(t,i)=>interactive?' data-part="'+t+'" data-pi="'+i+'" style="cursor:grab"':'';
+  let s='';
+  eyes.forEach((e,i)=>{
+    const ex=cx+e.x*zoom, ey=cy+e.y*zoom, sel=isSel('eye',i);
+    s+='<circle cx="'+r2(ex)+'" cy="'+r2(ey)+'" r="'+r2(eyeR)+'" fill="#fff" stroke="'+(sel?'#22d3ee':'#333')+'" stroke-width="'+(sel?2.5:1.2)+'"'+hit('eye',i)+'/>';
+    s+='<circle cx="'+r2(ex+eyeR*0.12)+'" cy="'+r2(ey-eyeR*0.1)+'" r="'+r2(eyeR*0.55)+'" fill="#111" pointer-events="none"/>';
+    s+='<circle cx="'+r2(ex+eyeR*0.25)+'" cy="'+r2(ey-eyeR*0.3)+'" r="'+r2(eyeR*0.18)+'" fill="#fff" pointer-events="none"/>';
+  });
+  const rings=(arr,type,color)=>arr.forEach((p,i)=>{
+    const x=cx+p.x*zoom, y=cy+p.y*zoom, sel=isSel(type,i), c=sel?'#22d3ee':color;
+    s+='<circle cx="'+r2(x)+'" cy="'+r2(y)+'" r="'+r2(hookR)+'" fill="none" stroke="'+c+'" stroke-width="'+(sel?2.5:1.5)+'"'+hit(type,i)+'/>';
+    s+='<circle cx="'+r2(x)+'" cy="'+r2(y)+'" r="'+r2(hookR*0.3)+'" fill="'+c+'" pointer-events="none"/>';
+  });
+  rings(hooks,'hook','#94a3b8');
+  rings(lineEyes,'lineEye','#f59e0b');
+  return s;
+}
 
 // === RENDER ===
-function render() {
+// Batched to one paint per frame. viewOnly=true (zoom/pan/parts) skips the physics recalculation.
+let renderPending=false, physPending=false;
+function render(viewOnly) {
+  if(viewOnly!==true) physPending=true;
+  if(renderPending) return;
+  renderPending=true;
+  requestAnimationFrame(doRender);
+}
+function doRender() {
+  renderPending=false;
+  applySym();
   renderView('side');
   renderView('top');
-  const ss=document.getElementById('symSide').checked, st=document.getElementById('symTop').checked;
+  const ss=symOn('side'), st=symOn('top');
   document.getElementById('statusInfo').textContent='측면: '+sidePts.length+'pt'+(ss?' (대칭)':'')+' | 상면: '+topPts.length+'pt'+(st?' (대칭)':'');
+  // Physics is recomputed once the drag ends (onUp re-renders)
+  if(physPending && dragView===null){ physPending=false; calcPhysics(); }
+}
+
+// Screen placement of a view: nose (max X across both views) sits at 65% of the canvas width
+function viewOrigin(view) {
+  const cont=document.getElementById(view==='side'?'sideCont':'topCont');
+  const w=cont.clientWidth, h=cont.clientHeight;
+  const pan=view==='side'?sidePan:topPan;
+  const noseX=layoutNoseX!==null?layoutNoseX:Math.max(xRange(sidePts).mx,xRange(topPts).mx);
+  return {w, h, cx:w*0.65+pan.x-noseX*viewZoom, cy:h/2+pan.y};
 }
 
 function renderView(which) {
   const isSide = which==='side';
   const svg = document.getElementById(isSide?'sideSVG':'topSVG');
-  const cont = document.getElementById(isSide?'sideCont':'topCont');
-  const w=cont.clientWidth, h=cont.clientHeight;
+  const {w,h,cx,cy} = viewOrigin(which);
   const zoom = viewZoom;
-  const pan = isSide?sidePan:topPan;
-
-  // Find nose (max X) to align both views at same screen position
-  let noseX = -Infinity;
-  sidePts.forEach(p=>{if(p.x>noseX)noseX=p.x;});
-  topPts.forEach(p=>{if(p.x>noseX)noseX=p.x;});
-  // Place nose at 65% from left of canvas
-  const noseScreenX = w*0.65 + pan.x;
-  const cx = noseScreenX - noseX*zoom;
-  const cy = h/2 + pan.y;
-
-  const sym = document.getElementById(isSide?'symSide':'symTop').checked;
-  const rawPts = isSide?sidePts:topPts;
-  const pts = mirror(rawPts, sym);
+  const sym = symOn(which);
+  const pts = viewPts(which);
   const accentC = isSide?'var(--side-color)':'var(--top-color)';
-  const showGrid = document.getElementById('gridToggle').checked;
-  const showPts = document.getElementById('showPtsToggle').checked;
+  const {mn:mnx,mx:mxx} = xRange(pts);
 
-  let html = '<defs>'+
-    '<filter id="sh'+which+'" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.3)"/></filter></defs>';
+  let html = '';
 
-  // Grid - 1mm minor, 10mm (1cm) major, anchored at nose
-  if(showGrid){
+  // Grid - 1mm minor, 10mm (1cm) major, anchored at nose. Drawn with tiled patterns
+  // instead of one <line> per grid line.
+  if(document.getElementById('gridToggle').checked){
     const gOp=parseInt(document.getElementById('gridOpSlider').value)/100;
-    const minorOp=(0.4*gOp).toFixed(3);
-    const majorOp=(0.8*gOp).toFixed(3);
-    const axisOp=(1.0*gOp).toFixed(3);
-    let noseMaxX=-Infinity;
-    pts.forEach(p=>{if(p.x>noseMaxX)noseMaxX=p.x;});
-    const noseSX=cx+noseMaxX*zoom;
-    const mmPx=zoom;
-    const drawMinor=mmPx>=3;
-    const cmPx=10*zoom;
-    const cmOx=((noseSX%cmPx)+cmPx)%cmPx;
-    const cmOy=((cy%cmPx)+cmPx)%cmPx;
-    if(drawMinor){
-      const mmOx=((noseSX%mmPx)+mmPx)%mmPx;
-      const mmOy=((cy%mmPx)+mmPx)%mmPx;
-      for(let x=mmOx;x<w;x+=mmPx){
-        html+='<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+h+'" stroke="#000" stroke-width="0.5" opacity="'+minorOp+'"/>';
-      }
-      for(let y=mmOy;y<h;y+=mmPx){
-        html+='<line x1="0" y1="'+y+'" x2="'+w+'" y2="'+y+'" stroke="#000" stroke-width="0.5" opacity="'+minorOp+'"/>';
-      }
-    }
-    for(let x=cmOx;x<w;x+=cmPx){
-      html+='<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+h+'" stroke="#000" stroke-width="1" opacity="'+majorOp+'"/>';
-    }
-    for(let y=cmOy;y<h;y+=cmPx){
-      html+='<line x1="0" y1="'+y+'" x2="'+w+'" y2="'+y+'" stroke="#000" stroke-width="1" opacity="'+majorOp+'"/>';
-    }
+    const noseSX=cx+mxx*zoom;
+    let defs='', fills='';
+    const grid=(id,size,sw,op)=>{
+      const c=size/2; // line runs through the tile centre so the stroke isn't clipped
+      defs+='<pattern id="'+id+'" width="'+size+'" height="'+size+'" patternUnits="userSpaceOnUse" x="'+(noseSX-c)+'" y="'+(cy-c)+'">'+
+        '<path d="M '+c+' 0 V '+size+' M 0 '+c+' H '+size+'" fill="none" stroke="#000" stroke-width="'+sw+'" opacity="'+op+'"/></pattern>';
+      fills+='<rect width="100%" height="100%" fill="url(#'+id+')"/>';
+    };
+    if(zoom>=3) grid('gmm'+which, zoom, 0.5, (0.4*gOp).toFixed(3));
+    grid('gcm'+which, 10*zoom, 1, (0.8*gOp).toFixed(3));
+    const axisOp=gOp.toFixed(3);
+    html+='<defs>'+defs+'</defs>'+fills;
     html+='<line x1="'+noseSX+'" y1="0" x2="'+noseSX+'" y2="'+h+'" stroke="#000" stroke-width="1.5" opacity="'+axisOp+'"/>';
     html+='<line x1="0" y1="'+cy+'" x2="'+w+'" y2="'+cy+'" stroke="#000" stroke-width="1.5" opacity="'+axisOp+'"/>';
   }
@@ -702,73 +693,35 @@ function renderView(which) {
 
   // Body
   const dp=pts.map(p=>({x:cx+p.x*zoom, y:cy+p.y*zoom}));
-  const path=smoothPath(dp,SM);
-  html+='<path d="'+path+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
+  html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
 
   // Center line
-  let mnx=Infinity,mxx=-Infinity,mny=Infinity,mxy=-Infinity;
-  pts.forEach(p=>{mnx=Math.min(mnx,p.x);mxx=Math.max(mxx,p.x);mny=Math.min(mny,p.y);mxy=Math.max(mxy,p.y);});
   html+='<line x1="'+(cx+(mnx+3)*zoom)+'" y1="'+cy+'" x2="'+(cx+(mxx-3)*zoom)+'" y2="'+cy+'" stroke="'+SC+'" stroke-width="0.7" stroke-dasharray="3,2" opacity="0.4"/>';
 
-  // Lip (side view only)
-  if(isSide && document.getElementById('lipToggle').checked){
-    const ll=parseInt(document.getElementById('lipLenSlider').value)*zoom;
-    const la=parseInt(document.getElementById('lipAngSlider').value)*Math.PI/180;
-    const nx=cx+mxx*zoom, ny=cy;
-    const ex=nx+Math.cos(la)*ll, ey=ny+Math.sin(la)*ll;
-    const px=-Math.sin(la),py=Math.cos(la), lw=6*zoom;
-    html+='<path d="M '+(nx+px*lw)+' '+(ny+py*lw)+' Q '+((nx+ex)/2+px*lw*0.8)+' '+((ny+ey)/2+py*lw*0.8)+', '+(ex+px*lw*0.3)+' '+(ey+py*lw*0.3)+
-      ' L '+(ex-px*lw*0.3)+' '+(ey-py*lw*0.3)+' Q '+((nx+ex)/2-px*lw*0.8)+' '+((ny+ey)/2-py*lw*0.8)+', '+(nx-px*lw)+' '+(ny-py*lw)+
-      ' Z" fill="rgba(200,220,240,0.3)" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
+  if(isSide){
+    // Lip
+    const lip=lipParams();
+    if(lip.on){
+      html+='<path d="'+lipGeom(cx+mxx*zoom, cy, lip.len*zoom, lip.ang*Math.PI/180, 6*zoom).d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
+    }
+    // Parts (draggable)
+    html+=partsMarkup(cx,cy,zoom,true);
   }
-
-  // === PARTS (draggable) ===
-  const eyeR = parseFloat(document.getElementById('eyeSizeSlider').value)*zoom;
-  const hookR = parseFloat(document.getElementById('hookSizeSlider').value)*zoom;
-
-  // Eyes (side view only)
-  if(isSide) eyes.forEach((e,i)=>{
-    const ex=cx+e.x*zoom, ey=cy+e.y*zoom;
-    const sel=selectedPart&&selectedPart.type==='eye'&&selectedPart.idx===i;
-    html+='<circle cx="'+ex+'" cy="'+ey+'" r="'+eyeR+'" fill="#fff" stroke="'+(sel?'#22d3ee':'#333')+'" stroke-width="'+(sel?2.5:1.2)+'" data-part="eye" data-pi="'+i+'" style="cursor:grab"/>';
-    html+='<circle cx="'+(ex+eyeR*0.12)+'" cy="'+(ey-eyeR*0.1)+'" r="'+(eyeR*0.55)+'" fill="#111" pointer-events="none"/>';
-    html+='<circle cx="'+(ex+eyeR*0.25)+'" cy="'+(ey-eyeR*0.3)+'" r="'+(eyeR*0.18)+'" fill="#fff" pointer-events="none"/>';
-  });
-
-  // Hook eyes (side view only)
-  if(isSide) hooks.forEach((h,i)=>{
-    const hx=cx+h.x*zoom, hy=cy+h.y*zoom;
-    const sel=selectedPart&&selectedPart.type==='hook'&&selectedPart.idx===i;
-    html+='<circle cx="'+hx+'" cy="'+hy+'" r="'+hookR+'" fill="none" stroke="'+(sel?'#22d3ee':'#94a3b8')+'" stroke-width="'+(sel?2.5:1.5)+'" data-part="hook" data-pi="'+i+'" style="cursor:grab"/>';
-    html+='<circle cx="'+hx+'" cy="'+hy+'" r="'+(hookR*0.3)+'" fill="'+(sel?'#22d3ee':'#94a3b8')+'" pointer-events="none"/>';
-  });
-
-  // Line eyes (side view only)
-  if(isSide) lineEyes.forEach((le,i)=>{
-    const lx=cx+le.x*zoom, ly=cy+le.y*zoom;
-    const sel=selectedPart&&selectedPart.type==='lineEye'&&selectedPart.idx===i;
-    html+='<circle cx="'+lx+'" cy="'+ly+'" r="'+hookR+'" fill="none" stroke="'+(sel?'#22d3ee':'#f59e0b')+'" stroke-width="'+(sel?2.5:1.5)+'" data-part="lineEye" data-pi="'+i+'" style="cursor:grab"/>';
-    html+='<circle cx="'+lx+'" cy="'+ly+'" r="'+(hookR*0.3)+'" fill="'+(sel?'#22d3ee':'#f59e0b')+'" pointer-events="none"/>';
-  });
 
   // Control points
-  if(showPts){
-    const touchPt=('ontouchstart' in window);
-    pts.forEach((p,i)=>{
-      const dx=cx+p.x*zoom, dy=cy+p.y*zoom;
-      const ed=isEditable(pts.length,i,sym);
-      const r=ed?(touchPt?8:4.5):(touchPt?5:3);
-      html+='<circle cx="'+dx+'" cy="'+dy+'" r="'+r+'" fill="'+(ed?'var(--bg)':'var(--surface2)')+'" stroke="'+(ed?accentC:'var(--text-dim)')+'" stroke-width="'+(touchPt?2:1.5)+'" class="control-point" data-idx="'+i+'" data-view="'+which+'"/>';
-    });
+  if(document.getElementById('showPtsToggle').checked){
+    const n=pts.length, ec=editableCount(n,sym);
+    for(let i=0;i<n;i++){
+      const ed=i<ec;
+      const r=ed?(HAS_TOUCH?8:4.5):(HAS_TOUCH?5:3);
+      html+='<circle cx="'+r2(dp[i].x)+'" cy="'+r2(dp[i].y)+'" r="'+r+'" fill="'+(ed?'var(--bg)':'var(--surface2)')+'" stroke="'+(ed?accentC:'var(--text-dim)')+'" stroke-width="'+(HAS_TOUCH?2:1.5)+'" class="control-point" data-idx="'+i+'" data-view="'+which+'"/>';
+    }
   }
 
-  // X-alignment guides: draw vertical dotted lines at nose & tail
+  // X-alignment guides: in top view, show where side view nose/tail are
   if(!isSide){
-    // In top view, show where side view nose/tail are
-    let smnx=Infinity,smxx=-Infinity;
-    const sPts=mirror(sidePts,document.getElementById('symSide').checked);
-    sPts.forEach(p=>{smnx=Math.min(smnx,p.x);smxx=Math.max(smxx,p.x);});
-    const noseX=cx+smxx*zoom, tailX=cx+smnx*zoom;
+    const s=xRange(sidePts);
+    const noseX=cx+s.mx*zoom, tailX=cx+s.mn*zoom;
     html+='<line x1="'+noseX+'" y1="0" x2="'+noseX+'" y2="'+h+'" stroke="var(--side-color)" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.3"/>';
     html+='<line x1="'+tailX+'" y1="0" x2="'+tailX+'" y2="'+h+'" stroke="var(--side-color)" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.3"/>';
   }
@@ -780,6 +733,8 @@ function renderView(which) {
 function setupEvents() {
   ['side','top'].forEach(v => {
     const svg=document.getElementById(v==='side'?'sideSVG':'topSVG');
+    const pointers={};
+    let pinchStart=null, pinchZoom=1;
 
     // Unified Pointer Events (mouse + touch + pen)
     svg.addEventListener('pointerdown', function(e){
@@ -788,69 +743,53 @@ function setupEvents() {
       svg.setPointerCapture(e.pointerId);
 
       // Track active pointers for pinch
-      if(!svg._pointers) svg._pointers={};
-      svg._pointers[e.pointerId]={x:e.clientX,y:e.clientY};
-      const pIds=Object.keys(svg._pointers);
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      const pIds=Object.keys(pointers);
 
       if(pIds.length===2){
-        // Pinch start
-        dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;isPan=false;
-        const p0=svg._pointers[pIds[0]], p1=svg._pointers[pIds[1]];
-        svg._pinchStart=Math.hypot(p0.x-p1.x,p0.y-p1.y);
-        svg._pinchZoom=viewZoom;
+        // Pinch start: end any drag that the first finger started
+        onUp();
+        const p0=pointers[pIds[0]], p1=pointers[pIds[1]];
+        pinchStart=Math.hypot(p0.x-p1.x,p0.y-p1.y);
+        pinchZoom=viewZoom;
       } else if(pIds.length===1){
-        svg._pinchStart=null;
-        onDown({clientX:e.clientX,clientY:e.clientY,preventDefault:function(){},target:e.target},v);
+        pinchStart=null;
+        onDown(e,v);
       }
     });
 
     svg.addEventListener('pointermove', function(e){
       e.preventDefault();
-      if(svg._pointers) svg._pointers[e.pointerId]={x:e.clientX,y:e.clientY};
-      const pIds=svg._pointers?Object.keys(svg._pointers):[];
+      if(pointers[e.pointerId]) pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      const pIds=Object.keys(pointers);
 
-      if(pIds.length===2 && svg._pinchStart){
-        const p0=svg._pointers[pIds[0]], p1=svg._pointers[pIds[1]];
+      if(pIds.length===2 && pinchStart){
+        const p0=pointers[pIds[0]], p1=pointers[pIds[1]];
         const d=Math.hypot(p0.x-p1.x,p0.y-p1.y);
-        const scale=d/svg._pinchStart;
-        viewZoom=Math.max(0.3,Math.min(8,svg._pinchZoom*scale));
-        render();
+        viewZoom=Math.max(0.3,Math.min(8,pinchZoom*d/pinchStart));
+        render(true);
       } else if(pIds.length<=1){
-        onMove({clientX:e.clientX,clientY:e.clientY},v);
+        onMove(e,v);
       }
     });
 
-    svg.addEventListener('pointerup', function(e){
-      if(svg._pointers) delete svg._pointers[e.pointerId];
-      svg._pinchStart=null;
+    const release=function(e){
+      delete pointers[e.pointerId];
+      pinchStart=null;
       try{svg.releasePointerCapture(e.pointerId);}catch(ex){}
       onUp();
-    });
+    };
+    svg.addEventListener('pointerup', release);
+    svg.addEventListener('pointercancel', release);
 
-    svg.addEventListener('pointercancel', function(e){
-      if(svg._pointers) delete svg._pointers[e.pointerId];
-      svg._pinchStart=null;
-      onUp();
-    });
-
-    svg.addEventListener('pointerleave', function(e){
-      if(e.pointerType==='mouse'){
-        if(svg._pointers) delete svg._pointers[e.pointerId];
-        onUp();
-      }
-    });
-
-    svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render();}, {passive:false});
-
-    // Prevent default touch actions on SVG
-    svg.style.touchAction='none';
+    svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render(true);}, {passive:false});
   });
-  window.addEventListener('resize', render);
+  window.addEventListener('resize', ()=>render(true));
   document.addEventListener('click', e=>{
     const wrap=document.getElementById('syncWrap');
     if(wrap && !wrap.contains(e.target)) document.getElementById('syncMenu').style.display='none';
   });
-  window.addEventListener('orientationchange', ()=>setTimeout(render,200));
+  window.addEventListener('orientationchange', ()=>setTimeout(()=>render(true),200));
   window.addEventListener('keydown', e=>{
     if(e.key==='Delete'||e.key==='Backspace'){
       if(selectedPart){
@@ -858,12 +797,17 @@ function setupEvents() {
         if(selectedPart.type==='eye') eyes.splice(selectedPart.idx,1);
         else if(selectedPart.type==='hook') hooks.splice(selectedPart.idx,1);
         else if(selectedPart.type==='lineEye') lineEyes.splice(selectedPart.idx,1);
-        selectedPart=null; updatePartCounts(); render();
+        selectedPart=null; updatePartCounts(); render(true);
         e.preventDefault();
       }
     }
-    if(e.key==='Escape') { selectedPart=null; render(); }
+    if(e.key==='Escape') { selectedPart=null; render(true); }
   });
+}
+
+function toggleSyncMenu() {
+  const m=document.getElementById('syncMenu');
+  m.style.display=m.style.display==='block'?'none':'block';
 }
 
 function getPos(e,view) {
@@ -872,143 +816,151 @@ function getPos(e,view) {
   return {x:e.clientX-r.left, y:e.clientY-r.top};
 }
 
-// Compute cx so that nose aligns at 65% of canvas width
-function getViewCx(view) {
-  const cont=document.getElementById(view==='side'?'sideCont':'topCont');
-  const w=cont.clientWidth;
-  const pan=view==='side'?sidePan:topPan;
-  let noseX=-Infinity;
-  sidePts.forEach(p=>{if(p.x>noseX)noseX=p.x;});
-  topPts.forEach(p=>{if(p.x>noseX)noseX=p.x;});
-  return w*0.65+pan.x - noseX*viewZoom;
+// Pointer position in body (mm) coords of a view
+function localPos(e,view) {
+  const pos=getPos(e,view), o=viewOrigin(view);
+  return {x:(pos.x-o.cx)/viewZoom, y:(pos.y-o.cy)/viewZoom};
+}
+
+// Nearest point within the hit radius among indices [from, to)
+function hitPoint(pts, q, from, to) {
+  let ci=-1, cd=(isTouch?30:14)/viewZoom;
+  for(let i=from;i<to;i++){
+    const d=Math.hypot(pts[i].x-q.x, pts[i].y-q.y);
+    if(d<cd){cd=d;ci=i;}
+  }
+  return ci;
 }
 
 function onDown(e,view) {
-  const pos=getPos(e,view);
-  const cont=document.getElementById(view==='side'?'sideCont':'topCont');
-  const w=cont.clientWidth, h=cont.clientHeight;
-  const zoom=viewZoom;
-  const pan=view==='side'?sidePan:topPan;
-  const cx=getViewCx(view), cy=h/2+pan.y;
-  const sym=document.getElementById(view==='side'?'symSide':'symTop').checked;
-  const rawPts=view==='side'?sidePts:topPts;
-  const pts=mirror(rawPts,sym);
+  const q=localPos(e,view);
+  const pts=viewPts(view), n=pts.length;
+  const sym=symOn(view);
 
   if(tool==='move'){
-    const hitR=isTouch?30:14;
+    const hitR=(isTouch?30:14)/viewZoom;
     // Check parts first (side view only)
     if(view==='side'){
       let bestD=hitR, bestType=null, bestIdx=-1;
-      eyes.forEach((p,i)=>{ const d=Math.hypot(cx+p.x*zoom-pos.x,cy+p.y*zoom-pos.y); if(d<bestD){bestD=d;bestType='eye';bestIdx=i;} });
-      hooks.forEach((p,i)=>{ const d=Math.hypot(cx+p.x*zoom-pos.x,cy+p.y*zoom-pos.y); if(d<bestD){bestD=d;bestType='hook';bestIdx=i;} });
-      lineEyes.forEach((p,i)=>{ const d=Math.hypot(cx+p.x*zoom-pos.x,cy+p.y*zoom-pos.y); if(d<bestD){bestD=d;bestType='lineEye';bestIdx=i;} });
+      [['eye',eyes],['hook',hooks],['lineEye',lineEyes]].forEach(([type,arr])=>arr.forEach((p,i)=>{
+        const d=Math.hypot(p.x-q.x,p.y-q.y); if(d<bestD){bestD=d;bestType=type;bestIdx=i;}
+      }));
       if(bestType!==null){
         saveH(); dragView=view; dragType='part'; dragPartType=bestType; dragPartIdx=bestIdx;
         selectedPart={type:bestType,idx:bestIdx};
-        e.preventDefault(); render(); return;
+        render(true); return;
       }
     }
     // Then check body control points
-    let ci=-1,cd=hitR;
-    for(let i=0;i<pts.length;i++){
-      if(!isEditable(pts.length,i,sym))continue;
-      const d=Math.hypot(cx+pts[i].x*zoom-pos.x, cy+pts[i].y*zoom-pos.y);
-      if(d<cd){cd=d;ci=i;}
+    const ci=hitPoint(pts,q,0,editableCount(n,sym));
+    if(ci>=0){
+      saveH(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
+      layoutNoseX=Math.max(xRange(sidePts).mx,xRange(topPts).mx);
+      render(true);
+    } else {
+      const pan=view==='side'?sidePan:topPan;
+      selectedPart=null; isPan=true; panTarget=view; panRef={x:e.clientX-pan.x,y:e.clientY-pan.y}; render(true);
     }
-    if(ci>=0){saveH();dragView=view;dragType='point';dragIdx=ci;selectedPart=null;e.preventDefault();render();}
-    else{selectedPart=null;isPan=true;panTarget=view;panRef={x:e.clientX-pan.x,y:e.clientY-pan.y};render();}
   } else if(tool==='add'){
-    let bi=0,bd=Infinity;
-    for(let i=0;i<pts.length;i++){
-      const j=(i+1)%pts.length;
-      const mx=(cx+pts[i].x*zoom+cx+pts[j].x*zoom)/2, my=(cy+pts[i].y*zoom+cy+pts[j].y*zoom)/2;
-      const d=Math.hypot(mx-pos.x,my-pos.y);
-      if(d<bd){bd=d;bi=j;}
-    }
-    saveH();
-    rawPts.splice(bi,0,{x:(pos.x-cx)/zoom,y:(pos.y-cy)/zoom});
-    const slider=document.getElementById(view==='side'?'sidePtsSlider':'topPtsSlider');
-    slider.value=rawPts.length;
-    document.getElementById(view==='side'?'sidePtsVal':'topPtsVal').textContent=rawPts.length;
-    forceSyncLength(); render();
+    addPointAt(view,q);
   } else if(tool==='delete'){
-    if(rawPts.length<=6)return;
-    let ci=-1,cd=isTouch?30:14;
-    for(let i=0;i<pts.length;i++){
-      const d=Math.hypot(cx+pts[i].x*zoom-pos.x,cy+pts[i].y*zoom-pos.y);
-      if(d<cd){cd=d;ci=i;}
-    }
-    if(ci>=0){saveH();rawPts.splice(ci,1);
-      const slider=document.getElementById(view==='side'?'sidePtsSlider':'topPtsSlider');
-      slider.value=rawPts.length;
-      document.getElementById(view==='side'?'sidePtsVal':'topPtsVal').textContent=rawPts.length;
-      forceSyncLength(); render();}
+    // Never the nose (0 / n-1) or a mirrored point
+    const ci=hitPoint(pts,q,1,Math.min(n-1,editableCount(n,sym)));
+    if(ci>=0) deletePointAt(view,ci);
   }
 }
 
-function onMove(e,view) {
-  const pos=getPos(e,view);
-  const cont=document.getElementById(view==='side'?'sideCont':'topCont');
-  const w=cont.clientWidth, h=cont.clientHeight;
-  const zoom=viewZoom;
-  const pan=view==='side'?sidePan:topPan;
-  const cx=getViewCx(view), cy=h/2+pan.y;
+// Insert a point on the nearest outline segment. With symmetry on, the point is added to the
+// editable half together with its mirror (or as a single tail point on the axis).
+function addPointAt(view, q) {
+  const pts=viewPts(view), n=pts.length, sym=symOn(view);
+  const ec=editableCount(n,sym);
+  // Segments (i,i+1); the closing nose->nose segment is excluded so nothing lands before pts[0].
+  // In sym mode only the editable half, plus the tail-crossing segment when n is even.
+  const lastSeg=!sym ? n-2 : (n%2===0 ? ec-1 : ec-2);
+  let bi=-1, bd=Infinity, flip=false;
+  for(let i=0;i<=lastSeg;i++){
+    const mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
+    const d=Math.hypot(mx-q.x,my-q.y);
+    if(d<bd){bd=d;bi=i;flip=false;}
+    if(sym){ const dm=Math.hypot(mx-q.x,-my-q.y); if(dm<bd){bd=dm;bi=i;flip=true;} }
+  }
+  if(bi<0) return;
+  const crossing=sym && n%2===0 && bi===ec-1;
+  const added=(sym&&!crossing)?2:1;
+  if(n+added>MAX_PTS) return;
+  saveH();
+  if(!sym) pts.splice(bi+1,0,{x:q.x,y:q.y});
+  else if(crossing) pts.splice(bi+1,0,{x:q.x,y:0});
+  else {
+    const u={x:q.x,y:flip?-q.y:q.y};
+    pts.splice(bi+1,0,u);
+    pts.splice(n-bi,0,{...u}); // mirror slot; applySym sets its value
+  }
+  applySym(); updatePtsSliders(); syncSlidersFromPoints(); render();
+}
 
-  document.getElementById('statusCoords').textContent='X: '+((pos.x-cx)/zoom).toFixed(1)+' Y: '+((pos.y-cy)/zoom).toFixed(1)+' ['+view+']';
+function deletePointAt(view, ci) {
+  const pts=viewPts(view), n=pts.length, sym=symOn(view);
+  if(ci<=0||ci>=n-1) return;
+  const partner=n-1-ci;
+  const pair=sym && partner!==ci;
+  if(n-(pair?2:1)<MIN_PTS) return;
+  saveH();
+  if(pair){ pts.splice(Math.max(ci,partner),1); pts.splice(Math.min(ci,partner),1); }
+  else pts.splice(ci,1);
+  applySym(); updatePtsSliders(); syncSlidersFromPoints(); render();
+}
+
+function onMove(e,view) {
+  const q=localPos(e,view);
+  document.getElementById('statusCoords').textContent='X: '+q.x.toFixed(1)+' Y: '+q.y.toFixed(1)+' ['+view+']';
 
   // Part dragging
   if(dragView===view && dragType==='part' && dragPartIdx!==null){
     const arr = dragPartType==='eye'?eyes : dragPartType==='hook'?hooks : lineEyes;
-    arr[dragPartIdx].x=(pos.x-cx)/zoom;
-    arr[dragPartIdx].y=(pos.y-cy)/zoom;
-    render();
+    arr[dragPartIdx].x=q.x;
+    arr[dragPartIdx].y=q.y;
+    render(true);
     return;
   }
 
   // Body point dragging
   if(dragView===view && dragType==='point' && dragIdx!==null){
-    const pts=view==='side'?sidePts:topPts;
-    const otherPts=view==='side'?topPts:sidePts;
-
-    let oldMinX=Infinity,oldMaxX=-Infinity;
-    pts.forEach(p=>{oldMinX=Math.min(oldMinX,p.x);oldMaxX=Math.max(oldMaxX,p.x);});
-    const oldLen=oldMaxX-oldMinX;
-
-    pts[dragIdx].x=(pos.x-cx)/zoom;
-    pts[dragIdx].y=(pos.y-cy)/zoom;
-
-    let newMinX=Infinity,newMaxX=-Infinity;
-    pts.forEach(p=>{newMinX=Math.min(newMinX,p.x);newMaxX=Math.max(newMaxX,p.x);});
-    const newLen=newMaxX-newMinX;
-
-    // Always sync other view's X to match
-    if(oldLen>1 && Math.abs(newLen-oldLen)>0.01){
-      const scale=newLen/oldLen;
-      let oMinX=Infinity,oMaxX=-Infinity;
-      otherPts.forEach(p=>{oMinX=Math.min(oMinX,p.x);oMaxX=Math.max(oMaxX,p.x);});
-      const oCx=(oMinX+oMaxX)/2;
-      otherPts.forEach(p=>p.x=oCx+(p.x-oCx)*scale);
-    }
-
+    const pts=viewPts(view);
+    const other=view==='side'?'top':'side';
+    const before=xRange(pts);
+    pts[dragIdx].x=q.x;
+    pts[dragIdx].y=q.y;
+    applySymTo(pts,symOn(view));
+    const after=xRange(pts);
+    // Keep the other view's length identical to this one
+    if(after.mn!==before.mn||after.mx!==before.mx) matchXRange(other,view);
     render();
+    return;
   }
   if(isPan && panTarget===view){
     const p=view==='side'?sidePan:topPan;
-    p.x=e.clientX-panRef.x; p.y=e.clientY-panRef.y;
-    render();
+    // X pan is shared so the length axis of both views stays aligned
+    sidePan.x=topPan.x=e.clientX-panRef.x;
+    p.y=e.clientY-panRef.y;
+    render(true);
   }
 }
 
+function endDrag() {
+  dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
+}
 function onUp(){
-  if(dragIdx!==null || dragPartIdx!==null) syncSlidersFromPoints();
-  dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;isPan=false;panTarget=null;
+  const changed=dragIdx!==null || dragPartIdx!==null;
+  endDrag();
+  if(changed){ syncSlidersFromPoints(); render(); }
 }
 
 // Variants
 function loadVariant(name) {
-  saveH();
   const V = {
-    standard: { side: defSide(), top: defTopFull(), lipLen:30, lipAng:35 },
+    standard: { side: defSide(), top: defTop(), lipLen:30, lipAng:35 },
     slim: {
       side: [{x:70,y:0},{x:65,y:-7},{x:45,y:-12},{x:25,y:-14},{x:0,y:-13},{x:-25,y:-11},{x:-50,y:-7},{x:-70,y:-3},
              {x:-70,y:3},{x:-50,y:7},{x:-25,y:11},{x:0,y:13},{x:25,y:14},{x:45,y:12},{x:65,y:7},{x:70,y:0}],
@@ -1032,7 +984,8 @@ function loadVariant(name) {
     }
   };
   const v=V[name]; if(!v)return;
-  sidePts=v.side.map(p=>({...p})); topPts=v.top.map(p=>({...p}));
+  saveH();
+  sidePts=v.side; topPts=v.top;
   // Reset parts to empty (default)
   eyes=[]; hooks=[]; lineEyes=[];
   selectedPart=null; updatePartCounts();
@@ -1041,71 +994,104 @@ function loadVariant(name) {
   document.getElementById('lipToggle').checked=false;
   document.getElementById('densitySlider').value=0.5;
   document.getElementById('densityVal').textContent='0.50';
-  document.getElementById('sidePtsSlider').value=sidePts.length; document.getElementById('sidePtsVal').textContent=sidePts.length;
-  document.getElementById('topPtsSlider').value=topPts.length; document.getElementById('topPtsVal').textContent=topPts.length;
+  updatePtsSliders();
   document.getElementById('lipLenSlider').value=v.lipLen; document.getElementById('lipLenVal').textContent=v.lipLen;
   document.getElementById('lipAngSlider').value=v.lipAng; document.getElementById('lipAngVal').textContent=v.lipAng+'°';
-  syncSlidersFromPoints(); render();
+  applySym(); syncSlidersFromPoints(); render();
 }
 
-// Export
+// === EXPORT ===
+// One valid SVG document: side view (body, lip, parts) on top, top view below. Units are the editor's mm.
 function exportSVG() {
-  function buildSVGStr(pts,label) {
-    const margin=20;
-    let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
-    pts.forEach(p=>{x1=Math.min(x1,p.x);y1=Math.min(y1,p.y);x2=Math.max(x2,p.x);y2=Math.max(y2,p.y);});
-    const w=(x2-x1)+margin*2, h=(y2-y1)+margin*2, ox=-x1+margin, oy=-y1+margin;
-    const dp=pts.map(p=>({x:p.x+ox,y:p.y+oy}));
-    return '<!-- '+label+' -->\n<svg xmlns="http://www.w3.org/2000/svg" width="'+w.toFixed(1)+'" height="'+h.toFixed(1)+'" viewBox="0 0 '+w.toFixed(1)+' '+h.toFixed(1)+'">\n  <path d="'+smoothPath(dp,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>\n</svg>';
+  const M=20, GAP=20;
+  const bbox=pts=>{ const x=xRange(pts), y=yRange(pts); return {x1:x.mn,y1:y.mn,w:x.mx-x.mn,h:y.mx-y.mn}; };
+  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
+  const hookR=parseFloat(document.getElementById('hookSizeSlider').value);
+  const sideExtent=sidePts.slice();
+  const addCircle=(p,r)=>sideExtent.push({x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r});
+  eyes.forEach(p=>addCircle(p,eyeR));
+  hooks.concat(lineEyes).forEach(p=>addCircle(p,hookR));
+  const lip=lipParams();
+  let lipEl='';
+  if(lip.on){
+    const g=lipGeom(xRange(sidePts).mx, 0, lip.len, lip.ang*Math.PI/180, 6);
+    sideExtent.push(...g.hull);
+    lipEl='\n    <path d="'+g.d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
   }
-  const ss=document.getElementById('symSide').checked, st=document.getElementById('symTop').checked;
-  const sp=mirror(sidePts,ss), tp=mirror(topPts,st);
-  const out=buildSVGStr(sp,'Side View')+'\n\n'+buildSVGStr(tp,'Top View');
+  const sb=bbox(sideExtent), tb=bbox(topPts);
+  const w=r2(Math.max(sb.w,tb.w)+M*2), h=r2(sb.h+tb.h+GAP+M*2);
+  const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
+  const parts=partsMarkup(0,0,1,false);
+  const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">\n'+
+    '  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-sb.x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+lipEl+
+    (parts?'\n    '+parts:'')+'\n  </g>\n'+
+    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-tb.x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+'\n  </g>\n</svg>';
   document.getElementById('exportContent').value=out;
   document.getElementById('exportOverlay').style.display='flex';
 }
 
+function copyExport(btn) {
+  const ta=document.getElementById('exportContent');
+  const done=ok=>{ btn.textContent=ok?'✅ 복사됨':'⚠ 복사 실패 - 직접 선택해 복사하세요'; setTimeout(()=>btn.textContent='📋 복사',1500); };
+  const fallback=()=>{ ta.select(); let ok=false; try{ok=document.execCommand('copy');}catch(e){} done(ok); };
+  if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(ta.value).then(()=>done(true),fallback);
+  else fallback();
+}
+
 function dlSVG(){
+  const url=URL.createObjectURL(new Blob([document.getElementById('exportContent').value],{type:'image/svg+xml'}));
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([document.getElementById('exportContent').value],{type:'image/svg+xml'}));
-  a.download='minnow-lure.svg';a.click();
+  a.href=url; a.download='minnow-lure.svg'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 // === PHYSICS CALCULATION ===
+// Height (side) or width (top) of the outline at a given X
+function spanAt(pts, x) {
+  let mn=Infinity, mx=-Infinity;
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length];
+    if(a.x===b.x || (a.x-x)*(b.x-x)>0) continue;
+    const y=a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x);
+    if(y<mn)mn=y; if(y>mx)mx=y;
+  }
+  return mx>mn?mx-mn:0;
+}
+
+let lastPhys=null;
 function calcPhysics() {
   // Get dimensions in mm
-  let smnx=Infinity,smxx=-Infinity,smny=Infinity,smxy=-Infinity;
-  sidePts.forEach(p=>{smnx=Math.min(smnx,p.x);smxx=Math.max(smxx,p.x);smny=Math.min(smny,p.y);smxy=Math.max(smxy,p.y);});
-  let tmnx=Infinity,tmxx=-Infinity,tmny=Infinity,tmxy=-Infinity;
-  topPts.forEach(p=>{tmnx=Math.min(tmnx,p.x);tmxx=Math.max(tmxx,p.x);tmny=Math.min(tmny,p.y);tmxy=Math.max(tmxy,p.y);});
-
-  const L=smxx-smnx; // length mm
-  const H=smxy-smny; // height mm
-  const W=tmxy-tmny; // width mm
+  const sx=xRange(sidePts), sy=yRange(sidePts), ty=yRange(topPts);
+  const L=sx.mx-sx.mn; // length mm
+  const H=sy.mx-sy.mn; // height mm
+  const W=ty.mx-ty.mn; // width mm
+  if(L<1||H<1||W<1) return;
   const density=parseFloat(document.getElementById('densitySlider').value);
   const addWeight=parseFloat(document.getElementById('weightSlider').value);
   const weightPos=parseInt(document.getElementById('weightPosSlider').value);
   const speed=parseInt(document.getElementById('speedSlider').value);
 
-  // Volume: approximate as ellipsoid * shape factor
-  // Cross-section area ratio vs full ellipse to estimate fill factor
-  const shapeFactor=0.65; // minnow shape fills ~65% of bounding box
-  const vol_cm3=(L/10)*(H/10)*(W/10)*shapeFactor*0.5236; // π/6 for ellipsoid
+  // Volume: integrate elliptical cross-sections whose axes are the side height and top width at each X
+  const N=64, dx=L/N;
+  let vol_mm3=0;
+  for(let k=0;k<N;k++){
+    const x=sx.mn+(k+0.5)*dx;
+    vol_mm3+=Math.PI/4*spanAt(sidePts,x)*spanAt(topPts,x)*dx;
+  }
+  const vol_cm3=vol_mm3/1000;
   const bodyWeight=vol_cm3*density;
   const totalWeight=bodyWeight+addWeight;
 
   // Buoyancy
   const waterDisplacement=vol_cm3*1.0; // water density 1.0 g/cm³
-  const buoyancyRatio=totalWeight/waterDisplacement;
+  const buoyancyRatio=waterDisplacement>0?totalWeight/waterDisplacement:Infinity;
   let buoyancyState, buoyancyColor;
   if(buoyancyRatio<0.92){buoyancyState='플로팅(F)';buoyancyColor='#10b981';}
   else if(buoyancyRatio<1.05){buoyancyState='서스펜딩(SP)';buoyancyColor='#f59e0b';}
   else{buoyancyState='싱킹(S)';buoyancyColor='#f43f5e';}
 
   // Diving depth based on lip
-  const lipLen=parseInt(document.getElementById('lipLenSlider').value);
-  const lipAng=parseInt(document.getElementById('lipAngSlider').value);
-  const hasLip=document.getElementById('lipToggle').checked;
+  const {on:hasLip,len:lipLen,ang:lipAng}=lipParams();
   let depth=0;
   if(hasLip){
     const lipFactor=lipLen/30; // normalized
@@ -1151,64 +1137,81 @@ function calcPhysics() {
   else if(hasLip && lipAng>60) comment+=' 높은 립 각도 → 얕은 레인지, 강한 워블.';
 
   // Update UI
-  document.getElementById('phBuoyancy').textContent=buoyancyState;
+  const set=(id,t)=>document.getElementById(id).textContent=t;
+  set('phBuoyancy',buoyancyState);
   document.getElementById('phBuoyancy').style.color=buoyancyColor;
-  document.getElementById('phVolume').textContent=vol_cm3.toFixed(1)+' cm³';
-  document.getElementById('phWeight').textContent=totalWeight.toFixed(1)+' g';
-  document.getElementById('phDepth').textContent=hasLip?(depth.toFixed(1)+' m'):'표층 (립 없음)';
-  document.getElementById('phWobble').textContent=wobbleType;
-  document.getElementById('phWobbleW').textContent=wobbleWidth;
-  document.getElementById('phRoll').textContent=rollType;
-  document.getElementById('phCast').textContent=castDist+' ('+(totalWeight).toFixed(0)+'g)';
-  document.getElementById('phComment').textContent=comment;
+  set('phVolume',vol_cm3.toFixed(1)+' cm³');
+  set('phWeight',totalWeight.toFixed(1)+' g');
+  set('phDepth',hasLip?(depth.toFixed(1)+' m'):'표층 (립 없음)');
+  set('phWobble',wobbleType);
+  set('phWobbleW',wobbleWidth);
+  set('phRoll',rollType);
+  set('phCast',castDist+' ('+totalWeight.toFixed(0)+'g)');
+  set('phComment',comment);
 
   // Store for animation
-  window._phys={L,H,W,hlRatio,whRatio,depth,wobbleType,buoyancyRatio,speed,lipLen,lipAng,hasLip,weightPos};
+  lastPhys={L,H,W,hlRatio,whRatio,depth,wobbleType,buoyancyRatio,speed,lipLen,lipAng,hasLip,weightPos};
 }
 
 // === ANIMATION ENGINE ===
-let animRAF=null, animTime=0, animView='side', animRunning=false;
+const ANIM_W=680, ANIM_H=360; // logical canvas size
+let animRAF=null, animTime=0, animLastTs=null, animView='side', animRunning=false, animCtx=null;
 
 function toggleAnimation(){
   document.getElementById('animOverlay').style.display='flex';
+  // Back the canvas with device pixels so it stays sharp on high-DPI screens
+  const canvas=document.getElementById('animCanvas');
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=ANIM_W*dpr; canvas.height=ANIM_H*dpr;
+  animCtx=canvas.getContext('2d');
+  animCtx.setTransform(dpr,0,0,dpr,0,0);
   calcPhysics();
   animTime=0;
   animPlay();
 }
 function closeAnimation(){
-  animStop();
+  animPause();
   document.getElementById('animOverlay').style.display='none';
 }
-function setAnimView(v){
+function setAnimView(v,btn){
   animView=v;
   document.querySelectorAll('.anim-view-btn').forEach(b=>b.classList.remove('active'));
-  event.target.classList.add('active');
+  btn.classList.add('active');
+  if(!animRunning) drawAnimation();
 }
+function animTogglePlay(){ if(animRunning) animPause(); else animPlay(); }
 function animPlay(){
   if(animRunning)return;
   animRunning=true;
+  animLastTs=null;
   document.getElementById('animPlayBtn').textContent='⏸ 일시정지';
-  animLoop();
+  animRAF=requestAnimationFrame(animLoop);
 }
-function animStop(){
+function animPause(){
   animRunning=false;
   if(animRAF)cancelAnimationFrame(animRAF);
   animRAF=null;
   document.getElementById('animPlayBtn').textContent='▶ 재생';
 }
+function animStop(){
+  animPause();
+  animTime=0;
+  if(animCtx) drawAnimation();
+}
 
-function animLoop(){
+function animLoop(ts){
   if(!animRunning)return;
-  animTime+=16;
+  // Advance by real elapsed time so speed doesn't depend on display refresh rate
+  if(animLastTs!==null) animTime+=Math.min(100,ts-animLastTs);
+  animLastTs=ts;
   drawAnimation();
   animRAF=requestAnimationFrame(animLoop);
 }
 
 function drawAnimation(){
-  const canvas=document.getElementById('animCanvas');
-  const ctx=canvas.getContext('2d');
-  const cw=canvas.width, ch=canvas.height;
-  const ph=window._phys||{L:130,H:44,W:24,hlRatio:0.33,whRatio:0.5,depth:1.5,speed:3,lipLen:30,lipAng:35,hasLip:true,weightPos:50,buoyancyRatio:1.0};
+  const ctx=animCtx;
+  const cw=ANIM_W, ch=ANIM_H;
+  const ph=lastPhys||{L:130,H:44,W:24,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',speed:3,lipLen:30,lipAng:35,hasLip:true,weightPos:50,buoyancyRatio:1.0};
 
   ctx.clearRect(0,0,cw,ch);
 
@@ -1260,13 +1263,12 @@ function drawAnimation(){
   // Draw lure body
   ctx.save();
   ctx.translate(lureX,lureY);
-
   if(animView==='side'){
     ctx.rotate(wobbleAngle*0.3); // pitch
-    drawLureSide(ctx,ph,wobbleAngle,t);
+    drawLureSide(ctx,ph);
   } else {
     ctx.rotate(wobbleAngle); // full yaw visible from top
-    drawLureTop(ctx,ph,t);
+    drawLureTop(ctx,ph);
   }
   ctx.restore();
 
@@ -1282,11 +1284,12 @@ function drawAnimation(){
 
   // Depth indicator
   ctx.fillStyle='rgba(255,255,255,0.3)';
-  ctx.font='11px Space Mono,monospace';
+  ctx.font="11px 'SF Mono',SFMono-Regular,'Courier New',monospace";
   ctx.textAlign='right';
-  ctx.fillText((ph.depth).toFixed(1)+'m',cw-15,baseY+4);
+  ctx.fillText(ph.depth.toFixed(1)+'m',cw-15,baseY+4);
 
   // Trail (movement history)
+  ctx.save();
   ctx.strokeStyle='rgba(34,211,238,0.08)';
   ctx.lineWidth=ph.H*0.25;
   ctx.lineCap='round';
@@ -1300,22 +1303,20 @@ function drawAnimation(){
     i===0?ctx.moveTo(tx,ty+tw):ctx.lineTo(tx,ty+tw);
   }
   ctx.stroke();
+  ctx.restore();
 
   // Info text
-  const wobNames={'와이드 워블':'Wide Wobble','미디엄 워블':'Medium Wobble','타이트 워블':'Tight Wobble','롤링 위주':'Rolling'};
   document.getElementById('animInfo').textContent=
     (animView==='side'?'측면':'상면')+' | '+
     ph.wobbleType+' | 잠행 '+ph.depth.toFixed(1)+'m | '+
     (ph.buoyancyRatio<0.92?'플로팅':ph.buoyancyRatio<1.05?'서스펜딩':'싱킹');
 }
 
-function drawLureSide(ctx,ph,wobble,t){
-  const sc=0.9; // scale
-  const pts=mirror(sidePts,document.getElementById('symSide').checked);
-  // Draw body
-  ctx.beginPath();
+// Closed smooth outline (same curve as smoothPath) scaled by sc
+function traceBody(ctx, pts, sc){
   const sp=pts.map(p=>({x:p.x*sc,y:p.y*sc}));
   const n=sp.length;
+  ctx.beginPath();
   for(let i=0;i<n;i++){
     const p0=sp[(i-1+n)%n],p1=sp[i],p2=sp[(i+1)%n],p3=sp[(i+2)%n];
     if(i===0)ctx.moveTo(p1.x,p1.y);
@@ -1330,6 +1331,11 @@ function drawLureSide(ctx,ph,wobble,t){
   ctx.strokeStyle=SC;
   ctx.lineWidth=1.5;
   ctx.fill();ctx.stroke();
+}
+
+function drawLureSide(ctx,ph){
+  const sc=0.9; // scale
+  traceBody(ctx,sidePts,sc);
 
   // Eye
   if(eyes.length>0){
@@ -1340,7 +1346,7 @@ function drawLureSide(ctx,ph,wobble,t){
 
   // Lip
   if(ph.hasLip){
-    let mxx=-Infinity;pts.forEach(p=>{if(p.x>mxx)mxx=p.x;});
+    const mxx=xRange(sidePts).mx;
     const ll=ph.lipLen*sc*0.7, la=ph.lipAng*Math.PI/180;
     const nx=mxx*sc;
     ctx.beginPath();
@@ -1352,29 +1358,14 @@ function drawLureSide(ctx,ph,wobble,t){
   }
 }
 
-function drawLureTop(ctx,ph,t){
+function drawLureTop(ctx,ph){
   const sc=0.9;
-  const pts=mirror(topPts,document.getElementById('symTop').checked);
-  ctx.beginPath();
-  const sp=pts.map(p=>({x:p.x*sc,y:p.y*sc}));
-  const n=sp.length;
-  for(let i=0;i<n;i++){
-    const p0=sp[(i-1+n)%n],p1=sp[i],p2=sp[(i+1)%n],p3=sp[(i+2)%n];
-    if(i===0)ctx.moveTo(p1.x,p1.y);
-    ctx.bezierCurveTo(
-      p1.x+(p2.x-p0.x)*SM, p1.y+(p2.y-p0.y)*SM,
-      p2.x-(p3.x-p1.x)*SM, p2.y-(p3.y-p1.y)*SM,
-      p2.x, p2.y
-    );
-  }
-  ctx.closePath();
-  ctx.fillStyle=FC;ctx.strokeStyle=SC;ctx.lineWidth=1.5;
-  ctx.fill();ctx.stroke();
+  traceBody(ctx,topPts,sc);
+  const mxx=xRange(topPts).mx;
 
   // Eyes (both sides from top)
   if(eyes.length>0){
-    let mxx=-Infinity;pts.forEach(p=>{if(p.x>mxx)mxx=p.x;});
-    let mxy=-Infinity;pts.forEach(p=>{mxy=Math.max(mxy,Math.abs(p.y));});
+    let mxy=0; topPts.forEach(p=>{mxy=Math.max(mxy,Math.abs(p.y));});
     const ex=(mxx-18)*sc;
     ctx.beginPath();ctx.arc(ex,-mxy*sc*0.45,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=0.8;ctx.stroke();
     ctx.beginPath();ctx.arc(ex,mxy*sc*0.45,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.stroke();
@@ -1382,7 +1373,6 @@ function drawLureTop(ctx,ph,t){
 
   // Lip from top
   if(ph.hasLip){
-    let mxx=-Infinity;pts.forEach(p=>{if(p.x>mxx)mxx=p.x;});
     const ll=ph.lipLen*sc*0.6;
     ctx.beginPath();
     ctx.moveTo(mxx*sc,-4*sc);
@@ -1393,10 +1383,6 @@ function drawLureTop(ctx,ph,t){
     ctx.fill();ctx.stroke();
   }
 }
-
-// Auto-recalculate on render
-const _origRender=render;
-render=function(){_origRender();calcPhysics();};
 
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 </script>
