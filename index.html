@@ -23,6 +23,7 @@
   .seg-btn:hover:not(.active){background:var(--border)}
   .preset-list{display:flex;flex-direction:column;gap:5px}
   .preset-btn{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left;transition:all 0.2s}
+  .preset-btn span{white-space:nowrap}
   .preset-btn small{color:var(--text-dim);font-size:10px;font-weight:400}
   .preset-btn.active{border-color:var(--accent);background:var(--accent-glow)}
   .preset-btn:hover:not(.active){background:var(--border)}
@@ -366,6 +367,13 @@ const PRESETS={
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
       density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
+    // Maria (Yamashita) models: length/weight/type from the maker; depth and width are estimates
+    rapido:{name:'라피도 F160', desc:'마리아 롤링 펜슬 160mm', L:160,
+      up:[4,10,14,15,14,11,6], lo:[4,10,14,15,14,11,6], hw:[4,8,11.5,12,11,8.5,4.5],
+      density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
+    legato:{name:'레가토 F190', desc:'마리아 플랫 펜슬 190mm', L:190,
+      up:[4,10,15,17,16,12,6], lo:[4,9,14,16,15,11,6], hw:[3.5,7,9,9.5,9,7,4],
+      density:0.5, weight:28, weightPos:45, hooks:[0.4,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
       density:0.4, weight:25, weightPos:85, hooks:[0.4,1], lineEye:'chin'}
