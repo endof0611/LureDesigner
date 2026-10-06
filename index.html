@@ -158,8 +158,8 @@
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">대칭 모드</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle()"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
       </div>
     </div>
     <div class="panel collapsed">
@@ -217,6 +217,7 @@
       <div class="panel-body">
       <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
       <div class="control-row"><span class="control-label">그리드</span><label class="toggle"><input type="checkbox" id="gridToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">그리드 선명도</span><span class="slider-value" id="gridOpVal">10%</span></div>
         <input type="range" min="5" max="100" value="10" id="gridOpSlider" oninput="document.getElementById('gridOpVal').textContent=this.value+'%';render()"></div>
       </div>
@@ -393,6 +394,31 @@ const PRESETS={
 };
 let currentPreset={cat:'seabass', key:'minnow'};
 let presetViewCat='seabass';
+let presetDirty=false; // shape or lure settings changed since the preset was loaded
+
+// Sidebar controls a preset sets; they are saved in the undo history together with the shape
+const CTL_FMT={density:v=>(+v).toFixed(2), weight:v=>v, weightPos:v=>v+'%', hookWeight:v=>v,
+  lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
+const CTL_CHECKS=['lipToggle','symSide','symTop'];
+function setCtl(id, v) {
+  const s=document.getElementById(id+'Slider');
+  s.value=v; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+}
+function ctlState() {
+  const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
+  for(const id in CTL_FMT) st.sl[id]=document.getElementById(id+'Slider').value;
+  CTL_CHECKS.forEach(id=>st.ck[id]=document.getElementById(id).checked);
+  return st;
+}
+// Returns true when the restored state belongs to a different preset
+function restoreCtl(st) {
+  for(const id in st.sl) setCtl(id,st.sl[id]);
+  for(const id in st.ck) document.getElementById(id).checked=st.ck[id];
+  const changed=st.preset.cat!==currentPreset.cat||st.preset.key!==currentPreset.key;
+  currentPreset={...st.preset}; presetDirty=st.dirty;
+  if(changed){ presetViewCat=currentPreset.cat; updatePresetUI(); }
+  return changed;
+}
 
 // Linear interpolation of a profile array at station t (0 at the nose tip)
 function presetProfile(arr, t) {
@@ -418,19 +444,18 @@ function applyPreset(cat, key) {
           : p.lineEye==='chin'?{x:X(PRESET_T[0]),y:lo(PRESET_T[0])*0.6}
           : {x:noseX+2,y:noseY+(p.lip?2:0)}];
 
-  const setCtl=(id,v,txt)=>{ document.getElementById(id+'Slider').value=v; document.getElementById(id+'Val').textContent=txt; };
-  setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)),Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
+  setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
   const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
-  setCtl('hookSize',hookR,hookR);
-  setCtl('density',p.density,p.density.toFixed(2));
-  setCtl('weight',p.weight,p.weight);
-  setCtl('weightPos',p.weightPos,p.weightPos+'%');
+  setCtl('hookSize',hookR);
+  setCtl('density',p.density);
+  setCtl('weight',p.weight);
+  setCtl('weightPos',p.weightPos);
   document.getElementById('lipToggle').checked=!!p.lip;
-  if(p.lip){ setCtl('lipLen',p.lip.len,p.lip.len); setCtl('lipAng',p.lip.ang,p.lip.ang+'°'); }
+  if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
   document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
   document.getElementById('symTop').checked=true;
 
-  currentPreset={cat,key}; presetViewCat=cat; updatePresetUI();
+  currentPreset={cat,key}; presetViewCat=cat; presetDirty=false; updatePresetUI();
   afterStateReplaced();
   resetView();
 }
@@ -439,7 +464,7 @@ function loadPreset(cat, key) {
   // On phones the sidebar covers the canvas; close it so the new shape is visible
   if(window.innerWidth<=768 && document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
 }
-function presetName() { return PRESETS[currentPreset.cat].items[currentPreset.key].name; }
+function presetName() { return PRESETS[currentPreset.cat].items[currentPreset.key].name+(presetDirty?' (수정됨)':''); }
 
 function showPresetCat(cat) { presetViewCat=cat; updatePresetUI(); }
 function updatePresetUI() {
@@ -472,9 +497,10 @@ function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).f
 
 // === HISTORY ===
 function saveH() {
-  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes})));
+  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,c:ctlState()})));
   if(undoStack.length>MAX_HIST) undoStack.shift();
   lastSaveKey=null;
+  presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
 // One undo step per continuous slider drag instead of one per input event
 function saveHGrouped(key) {
@@ -483,7 +509,14 @@ function saveHGrouped(key) {
   lastSaveKey=key; lastSaveT=now;
 }
 function afterStateReplaced() { selectedPart=null; updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render(); }
-function undoAction() { if(!undoStack.length)return; const h=undoStack.pop(); sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; afterStateReplaced(); }
+function undoAction() {
+  if(!undoStack.length)return;
+  const h=undoStack.pop();
+  sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l;
+  const presetChanged=restoreCtl(h.c);
+  afterStateReplaced();
+  if(presetChanged) resetView();
+}
 // Back to the selected preset
 function resetShape() { saveH(); applyPreset(currentPreset.cat, currentPreset.key); }
 
@@ -658,10 +691,10 @@ function applySymTo(pts, sym) {
   pts[n-1].x=pts[0].x; pts[n-1].y=pts[0].y;
 }
 function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
-function onSymToggle() { saveH(); applySym(); syncSlidersFromPoints(); render(); }
+// The checkbox has already flipped when onchange runs: record its previous state in the undo step
+function onSymToggle(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; applySym(); syncSlidersFromPoints(); render(); }
 // Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
 function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
-function isEditable(n, idx, sym) { return idx < editableCount(n,sym); }
 
 // Smooth path
 const r2=v=>Math.round(v*100)/100;
@@ -718,7 +751,7 @@ function partsMarkup(cx, cy, zoom, interactive) {
 
 // === RENDER ===
 // Batched to one paint per frame. viewOnly=true (zoom/pan/parts) skips the physics recalculation.
-let renderPending=false, physPending=false;
+let renderPending=false, physPending=false, inRender=false;
 function render(viewOnly) {
   if(viewOnly!==true) physPending=true;
   if(renderPending) return;
@@ -728,12 +761,12 @@ function render(viewOnly) {
 function doRender() {
   renderPending=false;
   applySym();
+  // Physics first (the CG/CB markers use it); skipped while dragging, onUp re-renders
+  if(physPending && dragView===null){ physPending=false; inRender=true; calcPhysics(); inRender=false; }
   renderView('side');
   renderView('top');
   const ss=symOn('side'), st=symOn('top');
   document.getElementById('statusInfo').textContent=presetName()+' | 측면: '+sidePts.length+'pt'+(ss?' (대칭)':'')+' | 상면: '+topPts.length+'pt'+(st?' (대칭)':'');
-  // Physics is recomputed once the drag ends (onUp re-renders)
-  if(physPending && dragView===null){ physPending=false; calcPhysics(); }
 }
 
 // Screen placement of a view: nose (max X across both views) sits at 65% of the canvas width
@@ -784,6 +817,14 @@ function renderView(which) {
   const dp=pts.map(p=>({x:cx+p.x*zoom, y:cy+p.y*zoom}));
   html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
 
+  // Internal weight (draggable in the side view)
+  const wg=parseFloat(document.getElementById('weightSlider').value);
+  if(wg>0){
+    const wp=weightPlacement(isSide?flattenSmooth(pts,SM,12):[]), sz=weightSize(wg);
+    const sel=dragType==='weight';
+    html+='<ellipse cx="'+r2(cx+wp.x*zoom)+'" cy="'+r2(cy+(isSide?wp.z:0)*zoom)+'" rx="'+r2(sz.rx*zoom)+'" ry="'+r2(sz.ry*zoom)+'" fill="#94a3b8" fill-opacity="0.8" stroke="'+(sel?'#22d3ee':'#475569')+'" stroke-width="'+(sel?2:1)+'"'+(isSide?' style="cursor:ew-resize"':' pointer-events="none"')+'/>';
+  }
+
   // Center line
   html+='<line x1="'+(cx+(mnx+3)*zoom)+'" y1="'+cy+'" x2="'+(cx+(mxx-3)*zoom)+'" y2="'+cy+'" stroke="'+SC+'" stroke-width="0.7" stroke-dasharray="3,2" opacity="0.4"/>';
 
@@ -791,10 +832,23 @@ function renderView(which) {
     // Lip
     const lip=lipParams();
     if(lip.on){
-      html+='<path d="'+lipGeom(cx+mxx*zoom, cy, lip.len*zoom, lip.ang*Math.PI/180, 6*zoom).d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
+      html+='<path d="'+lipGeom(cx+pts[0].x*zoom, cy+pts[0].y*zoom, lip.len*zoom, lip.ang*Math.PI/180, 6*zoom).d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
     }
     // Parts (draggable)
     html+=partsMarkup(cx,cy,zoom,true);
+    // Centre of gravity (G) / buoyancy (B) and the vertical through G at the rest posture
+    if(document.getElementById('cgToggle').checked && lastPhys && dragView===null){
+      const G={x:cx+lastPhys.cg.x*zoom, y:cy+lastPhys.cg.z*zoom}, B={x:cx+lastPhys.cb.x*zoom, y:cy+lastPhys.cb.z*zoom};
+      const th=(lastPhys.pitch||0)*Math.PI/180, len=lastPhys.H*0.8*zoom;
+      const vx=Math.sin(th)*len, vy=Math.cos(th)*len; // world "down" in body coordinates
+      html+='<g pointer-events="none" font-family="SF Mono,Courier New,monospace" font-size="11" font-weight="700">'+
+        '<line x1="'+r2(G.x-vx)+'" y1="'+r2(G.y-vy)+'" x2="'+r2(G.x+vx)+'" y2="'+r2(G.y+vy)+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>'+
+        '<circle cx="'+r2(B.x)+'" cy="'+r2(B.y)+'" r="5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>'+
+        '<text x="'+r2(B.x+8)+'" y="'+r2(B.y+4)+'" fill="#3b82f6">B</text>'+
+        '<circle cx="'+r2(G.x)+'" cy="'+r2(G.y)+'" r="5" fill="#fff" stroke="#111" stroke-width="1.5"/>'+
+        '<path d="M '+r2(G.x-5)+' '+r2(G.y)+' H '+r2(G.x+5)+' M '+r2(G.x)+' '+r2(G.y-5)+' V '+r2(G.y+5)+'" stroke="#111" stroke-width="1.2"/>'+
+        '<text x="'+r2(G.x+8)+'" y="'+r2(G.y-4)+'" fill="#111">G</text></g>';
+    }
   }
 
   // Control points
@@ -873,6 +927,12 @@ function setupEvents() {
 
     svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render(true);}, {passive:false});
   });
+  const NOT_LURE=new Set(['gridToggle','showPtsToggle','gridOpSlider','strokeSlider','speedSlider','cgToggle']);
+  // Sliders: 'input'. Checkboxes: 'change', which bubbles here after their own onchange (and its undo step)
+  const markDirty=e=>{ if(e.target.id && !NOT_LURE.has(e.target.id)){ presetDirty=true; render(true); } };
+  const sb=document.getElementById('sidebar');
+  sb.addEventListener('input', e=>{ if(e.target.type!=='checkbox') markDirty(e); });
+  sb.addEventListener('change', e=>{ if(e.target.type==='checkbox') markDirty(e); });
   window.addEventListener('resize', ()=>render(true));
   document.addEventListener('click', e=>{
     const wrap=document.getElementById('syncWrap');
@@ -880,6 +940,7 @@ function setupEvents() {
   });
   window.addEventListener('orientationchange', ()=>setTimeout(()=>render(true),200));
   window.addEventListener('keydown', e=>{
+    if(e.target.matches && e.target.matches('input,textarea,select')) return; // keys belong to the focused control
     if(e.key==='Delete'||e.key==='Backspace'){
       if(selectedPart){
         saveH();
@@ -942,9 +1003,19 @@ function onDown(e,view) {
     }
     // Then check body control points
     const ci=hitPoint(pts,q,0,editableCount(n,sym));
+    const wg=parseFloat(document.getElementById('weightSlider').value);
+    let onWeight=false;
+    if(ci<0 && view==='side' && wg>0){
+      // Inside the weight ellipse, grown so small weights stay easy to grab
+      const wp=weightPlacement(flattenSmooth(sidePts,SM,12)), sz=weightSize(wg), g=hitR*0.4;
+      onWeight=((q.x-wp.x)/(sz.rx+g))**2+((q.y-wp.z)/(sz.ry+g))**2<=1;
+    }
     if(ci>=0){
       saveH(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
       layoutNoseX=Math.max(xRange(sidePts).mx,xRange(topPts).mx);
+      render(true);
+    } else if(onWeight){
+      saveH(); dragView=view; dragType='weight'; selectedPart=null;
       render(true);
     } else {
       const pan=view==='side'?sidePan:topPan;
@@ -1014,6 +1085,14 @@ function onMove(e,view) {
     return;
   }
 
+  // Weight dragging: moves along the body, updating the weight-position slider (10-90%)
+  if(dragView===view && dragType==='weight'){
+    const sx=xRange(sidePts), L=sx.mx-sx.mn;
+    setCtl('weightPos',Math.max(10,Math.min(90,Math.round((sx.mx-q.x)/L*100))));
+    render(true);
+    return;
+  }
+
   // Body point dragging
   if(dragView===view && dragType==='point' && dragIdx!==null){
     const pts=viewPts(view);
@@ -1041,7 +1120,7 @@ function endDrag() {
   dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
 }
 function onUp(){
-  const changed=dragIdx!==null || dragPartIdx!==null;
+  const changed=dragIdx!==null || dragPartIdx!==null || dragType==='weight';
   endDrag();
   if(changed){ syncSlidersFromPoints(); render(); }
 }
@@ -1060,18 +1139,25 @@ function exportSVG() {
   const lip=lipParams();
   let lipEl='';
   if(lip.on){
-    const g=lipGeom(xRange(sidePts).mx, 0, lip.len, lip.ang*Math.PI/180, 6);
+    const g=lipGeom(sidePts[0].x, sidePts[0].y, lip.len, lip.ang*Math.PI/180, 6);
     sideExtent.push(...g.hull);
     lipEl='\n    <path d="'+g.d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
+  }
+  const wg=parseFloat(document.getElementById('weightSlider').value);
+  let wSide='', wTop='';
+  if(wg>0){
+    const wp=weightPlacement(flattenSmooth(sidePts,SM,12)), sz=weightSize(wg);
+    const el=(y,ry)=>'\n    <ellipse class="weight" cx="'+r2(wp.x)+'" cy="'+r2(y)+'" rx="'+r2(sz.rx)+'" ry="'+r2(ry)+'" fill="none" stroke="#475569" stroke-width="0.5" stroke-dasharray="2,1"/>';
+    wSide=el(wp.z,sz.ry); wTop=el(0,sz.ry);
   }
   const sb=bbox(sideExtent), tb=bbox(topPts);
   const w=r2(Math.max(sb.w,tb.w)+M*2), h=r2(sb.h+tb.h+GAP+M*2);
   const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
   const parts=partsMarkup(0,0,1,false);
   const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">\n'+
-    '  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-sb.x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+lipEl+
+    '  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-sb.x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
     (parts?'\n    '+parts:'')+'\n  </g>\n'+
-    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-tb.x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+'\n  </g>\n</svg>';
+    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-tb.x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>\n</svg>';
   document.getElementById('exportContent').value=out;
   document.getElementById('exportOverlay').style.display='flex';
 }
@@ -1140,7 +1226,8 @@ function ellipseSeg(t) {
 // Rest pitch (deg, + = nose down): the posture where the centre of gravity sits straight below the
 // centre of buoyancy. For a floating lure the waterline is solved at each pitch so that the submerged
 // part carries the weight. slices: body cross-sections; parts: small items, always counted as submerged.
-// Returns a number, 'neutral' (no restoring moment) or 'unstable' (would capsize).
+// Returns {pitch, cb}: pitch is a number, 'neutral' (no restoring moment) or 'unstable' (would capsize);
+// cb is the centre of buoyancy of the submerged part at that pitch.
 function restPitch(slices, parts, M, cg) {
   const pv=parts.reduce((s,i)=>s+i.v*1000,0); // mm³
   const pvx=parts.reduce((s,i)=>s+i.v*1000*i.x,0), pvz=parts.reduce((s,i)=>s+i.v*1000*i.z,0);
@@ -1156,8 +1243,8 @@ function restPitch(slices, parts, M, cg) {
     }
     return {v,mx,mz};
   };
-  // Horizontal offset of CB ahead of CG at pitch th; > 0 lifts the nose (pitch decreases)
-  const torque=th=>{
+  // Centre of buoyancy at pitch th (waterline solved for floating lures)
+  const cbAt=th=>{
     const sn=Math.sin(th), cs=Math.cos(th);
     let r;
     if(target>=fullV) r=submerged(sn,cs,-1e9);
@@ -1167,12 +1254,17 @@ function restPitch(slices, parts, M, cg) {
       for(let i=0;i<28;i++){ const c=(lo+hi)/2; if(submerged(sn,cs,c).v>target) lo=c; else hi=c; }
       r=submerged(sn,cs,(lo+hi)/2);
     }
-    return (r.mx/r.v*cs-r.mz/r.v*sn)-(cg.x*cs-cg.z*sn);
+    return {x:r.mx/r.v, z:r.mz/r.v};
+  };
+  // Horizontal offset of CB ahead of CG at pitch th; > 0 lifts the nose (pitch decreases)
+  const torque=th=>{
+    const b=cbAt(th), sn=Math.sin(th), cs=Math.cos(th);
+    return (b.x*cs-b.z*sn)-(cg.x*cs-cg.z*sn);
   };
   const lim=85*Math.PI/180, steps=40;
   const ths=[], fs=[];
   for(let i=0;i<=steps;i++){ const th=-lim+2*lim*i/steps; ths.push(th); fs.push(torque(th)); }
-  if(Math.max(...fs.map(Math.abs))<0.05) return 'neutral';
+  if(Math.max(...fs.map(Math.abs))<0.05) return {pitch:'neutral', cb:cbAt(0)};
   // Stable equilibria: torque rises through zero
   let best=null;
   for(let i=0;i<steps;i++){
@@ -1183,11 +1275,22 @@ function restPitch(slices, parts, M, cg) {
       if(best===null||Math.abs(th)<Math.abs(best)) best=th;
     }
   }
-  if(best!==null) return best*180/Math.PI;
-  if(fs.every(f=>f>0)) return -90; // hangs tail-down
-  if(fs.every(f=>f<0)) return 90;  // hangs nose-down
-  return 'unstable';
+  if(best!==null) return {pitch:best*180/Math.PI, cb:cbAt(best)};
+  if(fs.every(f=>f>0)) return {pitch:-90, cb:cbAt(-lim)}; // hangs tail-down
+  if(fs.every(f=>f<0)) return {pitch:90, cb:cbAt(lim)};   // hangs nose-down
+  return {pitch:'unstable', cb:cbAt(0)};
 }
+
+// Internal weight: low in the belly, weightPos % of the length back from the nose.
+// side = flattened side outline (for the height); shared by physics, drawing and export.
+function weightPlacement(side) {
+  const sx=xRange(sidePts), L=sx.mx-sx.mn;
+  const x=sx.mx-L*parseInt(document.getElementById('weightPosSlider').value)/100;
+  const s=spanAt(side,x);
+  return {x, z:s?(s.mn+s.mx)/2+(s.mx-s.mn)*0.25:0};
+}
+// Drawn as an ellipsoid 1.5k × k × k with the same volume as the lead
+function weightSize(g) { const k=Math.cbrt(g/LEAD*1000/(2*Math.PI)); return {rx:1.5*k, ry:k}; }
 
 // Cast distance (m) with quadratic air drag, assuming the same tackle for every lure:
 // launch speed grows with lure mass as the rod loads (32 m/s limit), and the line adds a fixed drag area.
@@ -1238,15 +1341,11 @@ function calcPhysics() {
 
   // Every component: mass m (g), displaced volume v (cm³), position x/z (mm)
   const items=[{m:vol_cm3*density, v:vol_cm3, x:mxB/vBody, z:mzB/vBody}];
-  if(addWeight>0){
-    // Internal weight sits low in the belly, weightPos % of the length back from the nose
-    const wx=sx.mx-L*weightPos/100, s=spanAt(side,wx);
-    items.push({m:addWeight, v:addWeight/LEAD, x:wx, z:s?(s.mn+s.mx)/2+(s.mx-s.mn)*0.25:0});
-  }
+  if(addWeight>0){ const w=weightPlacement(side); items.push({m:addWeight, v:addWeight/LEAD, x:w.x, z:w.z}); }
   // Treble hook + split ring on each hook eye, hanging ~5 mm below it
   hooks.forEach(h=>items.push({m:hookW, v:hookW/STEEL, x:h.x, z:h.y+5}));
   if(lip.on){
-    const g=lipGeom(sx.mx,0,lip.len,lip.ang*Math.PI/180,6);
+    const g=lipGeom(sidePts[0].x,sidePts[0].y,lip.len,lip.ang*Math.PI/180,6);
     const v=polyArea(g.hull)*LIP_THICK/1000;
     items.push({m:v*LIP_DENSITY, v, x:g.hull.reduce((s,p)=>s+p.x,0)/6, z:g.hull.reduce((s,p)=>s+p.y,0)/6});
   }
@@ -1266,10 +1365,10 @@ function calcPhysics() {
   // Rest posture (pitch in degrees, + = nose down)
   const rp=restPitch(slices,items.slice(1),M,cg);
   let pitch=null, posture;
-  if(rp==='neutral') posture='중립 (복원력 없음)';
-  else if(rp==='unstable') posture='불안정 (뒤집힘 위험)';
+  if(rp.pitch==='neutral') posture='중립 (복원력 없음)';
+  else if(rp.pitch==='unstable') posture='불안정 (뒤집힘 위험)';
   else {
-    pitch=rp;
+    pitch=rp.pitch;
     posture=Math.abs(pitch)<5?'수평':(pitch>0?'머리 숙임 ':'꼬리 숙임 ')+Math.abs(pitch).toFixed(0)+'°';
   }
 
@@ -1312,11 +1411,15 @@ function calcPhysics() {
   const castDist=castM>=55?'장거리':castM>=40?'중거리':'단거리';
 
   // Weight position effect comment
-  let comment='';
-  if(weightPos<35) comment='💡 웨이트가 앞쪽 → 노즈다이브 경향, 빠른 잠행. 비행 자세는 불안정. ';
-  else if(weightPos>65) comment='💡 웨이트가 뒤쪽 → 비행 안정(비거리↑), 느린 잠행. ';
-  else comment='💡 웨이트 중심 배치 → 안정적 수평 자세. ';
-  if(posture.startsWith('불안정')) comment+='⚠ 무게중심이 부력중심보다 높아 뒤집힐 수 있음. ';
+  // Comment follows the computed rest posture, plus the weight's effect on casting
+  let comment;
+  if(rp.pitch==='unstable') comment='⚠ 무게중심이 부력중심보다 높아 뒤집힐 수 있음. ';
+  else if(rp.pitch==='neutral') comment='💡 복원력이 없어 정지 자세가 정해지지 않음. ';
+  else if(pitch>10) comment='💡 머리 숙인 정지 자세 → '+(lip.on?'립이 빨리 물어 빠른 잠행. ':'노즈다이브 경향. ');
+  else if(pitch<-10) comment='💡 꼬리 숙인 정지 자세 (펜슬·포퍼형). ';
+  else comment='💡 수평 정지 자세 → 안정적. ';
+  if(weightPos>65) comment+='웨이트가 뒤쪽 → 비행 안정(비거리↑). ';
+  else if(weightPos<35) comment+='웨이트가 앞쪽 → 비행 중 회전 경향. ';
 
   if(hlRatio>0.4) comment+='높은 바디 → 강한 수압 저항으로 어필력 강함.';
   else if(hlRatio<0.2) comment+='슬림 바디 → 저항 적어 자연스러운 액션.';
@@ -1340,12 +1443,14 @@ function calcPhysics() {
   set('phComment',comment);
 
   // Store for animation
-  lastPhys={L,H,W,hlRatio,whRatio,depth,wobbleType,wobbleHz,buoyancyRatio,buoyancyState,pitch,speed,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on};
+  lastPhys={H,hlRatio,whRatio,depth,wobbleType,wobbleHz,buoyancyState,pitch,speed,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb};
+  // Slider-driven recalculation outside a render: refresh the CG/CB markers
+  if(!inRender && document.getElementById('cgToggle').checked) render(true);
 }
 
 // === ANIMATION ENGINE ===
 const ANIM_W=680, ANIM_H=360; // logical canvas size
-let animRAF=null, animTime=0, animLastTs=null, animView='side', animRunning=false, animCtx=null;
+let animRAF=null, animTime=0, animLastTs=null, animView='side', animRunning=false, animCtx=null, animInfoText='';
 
 function toggleAnimation(){
   document.getElementById('animOverlay').style.display='flex';
@@ -1497,10 +1602,10 @@ function drawAnimation(){
   ctx.stroke();
   ctx.restore();
 
-  // Info text
-  document.getElementById('animInfo').textContent=
-    (animView==='side'?'측면':'상면')+' | '+
+  // Info text (written only when it changes, not every frame)
+  const info=(animView==='side'?'측면':'상면')+' | '+
     ph.wobbleType+' '+ph.wobbleHz.toFixed(1)+'Hz | 잠행 '+ph.depth.toFixed(1)+'m | '+ph.buoyancyState;
+  if(info!==animInfoText){ animInfoText=info; document.getElementById('animInfo').textContent=info; }
 }
 
 // Closed smooth outline (same curve as smoothPath) scaled by sc
@@ -1537,13 +1642,12 @@ function drawLureSide(ctx,ph){
 
   // Lip
   if(ph.hasLip){
-    const mxx=xRange(sidePts).mx;
     const ll=ph.lipLen*sc*0.7, la=ph.lipAng*Math.PI/180;
-    const nx=mxx*sc;
+    const nx=sidePts[0].x*sc, ny=sidePts[0].y*sc; // lip root = nose point
     ctx.beginPath();
-    ctx.moveTo(nx,5*sc);
-    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),5*sc+ll*0.5*Math.sin(la), nx+ll*Math.cos(la),ll*Math.sin(la));
-    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),-5*sc+ll*0.5*Math.sin(la), nx,-5*sc);
+    ctx.moveTo(nx,ny+5*sc);
+    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),ny+5*sc+ll*0.5*Math.sin(la), nx+ll*Math.cos(la),ny+ll*Math.sin(la));
+    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),ny-5*sc+ll*0.5*Math.sin(la), nx,ny-5*sc);
     ctx.fillStyle='rgba(200,230,255,0.2)';ctx.strokeStyle=SC;ctx.lineWidth=0.8;
     ctx.fill();ctx.stroke();
   }
@@ -1552,7 +1656,7 @@ function drawLureSide(ctx,ph){
 function drawLureTop(ctx,ph){
   const sc=0.9;
   traceBody(ctx,topPts,sc);
-  const mxx=xRange(topPts).mx;
+  const mxx=xRange(topPts).mx, nose=topPts[0].x;
 
   // Eyes (both sides from top)
   if(eyes.length>0){
@@ -1566,9 +1670,9 @@ function drawLureTop(ctx,ph){
   if(ph.hasLip){
     const ll=ph.lipLen*sc*0.6;
     ctx.beginPath();
-    ctx.moveTo(mxx*sc,-4*sc);
-    ctx.lineTo(mxx*sc+ll,0);
-    ctx.lineTo(mxx*sc,4*sc);
+    ctx.moveTo(nose*sc,-4*sc);
+    ctx.lineTo(nose*sc+ll,0);
+    ctx.lineTo(nose*sc,4*sc);
     ctx.closePath();
     ctx.fillStyle='rgba(200,230,255,0.2)';ctx.strokeStyle=SC;ctx.lineWidth=0.8;
     ctx.fill();ctx.stroke();
