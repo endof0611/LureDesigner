@@ -359,15 +359,16 @@ let selectedPart = null; // {type, idx}
 const PRESET_T=[0.03,0.10,0.22,0.40,0.60,0.80,1.0];
 const PRESETS={
   biggame:{label:'빅게임', items:{
+    // Big-game plugs keep a thick, blunt tail carrying the tail hook eye (hook station 1 = tail end)
     aji:{name:'전갱이', desc:'다이빙 펜슬 180mm', L:180,
-      up:[5,12,18,20,16,8,3], lo:[5,12,19,21,17,8,3], hw:[4,8,10,10,8,4,2],
-      density:0.4, weight:30, weightPos:55, hooks:[0.38,0.72], lineEye:'nose'},
+      up:[5,13,19,21,19,15,7.5], lo:[4,10,15,17,15,12,6.5], hw:[4,8,10,10,9,7,4.5],
+      density:0.4, weight:30, weightPos:65, hooks:[0.38,1], lineEye:'nose'},
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
-      up:[4,9,13,15,13,8,3], lo:[4,9,13,15,13,8,3], hw:[4,7,9,9,8,5,2],
-      density:0.4, weight:25, weightPos:60, hooks:[0.4,0.75], lineEye:'nose'},
+      up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
+      density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
-      up:[17,19,20,19,15,8,3], lo:[17,19,20,19,15,8,3], hw:[15,16,16,15,11,6,2],
-      density:0.35, weight:20, weightPos:70, hooks:[0.4,0.78], lineEye:'chin'}
+      up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
+      density:0.4, weight:25, weightPos:85, hooks:[0.4,1], lineEye:'chin'}
   }},
   seabass:{label:'농어', items:{
     minnow:{name:'플로팅 미노우', desc:'립 미노우 125mm', L:125,
@@ -439,7 +440,8 @@ function applyPreset(cat, key) {
   const up=t=>presetProfile(p.up,t), lo=t=>presetProfile(p.lo,t);
   const eyeT=0.12, half=(up(eyeT)+lo(eyeT))/2;
   eyes=[{x:X(eyeT), y:(lo(eyeT)-up(eyeT))/2-0.2*half}];
-  hooks=p.hooks.map(t=>({x:X(t), y:lo(t)+1.5}));
+  // Belly hook eyes sit under the body; station 1 is a tail eye on the end face
+  hooks=p.hooks.map(t=>t>=1?{x:X(1)-2, y:(lo(1)-up(1))/2}:{x:X(t), y:lo(t)+1.5});
   lineEyes=[p.lineEye==='back'?{x:X(0.2),y:-up(0.2)-2}
           : p.lineEye==='chin'?{x:X(PRESET_T[0]),y:lo(PRESET_T[0])*0.6}
           : {x:noseX+2,y:noseY+(p.lip?2:0)}];
