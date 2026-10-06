@@ -234,7 +234,7 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">웨이트 위치 (앞↔뒤)</span><span class="slider-value" id="weightPosVal">50%</span></div>
         <input type="range" min="10" max="90" value="50" id="weightPosSlider" oninput="document.getElementById('weightPosVal').textContent=this.value+'%';calcPhysics()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
-        <input type="range" min="0" max="5" value="1.5" step="0.1" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
+        <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
         <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];calcPhysics()"></div>
       </div>
@@ -367,10 +367,15 @@ const PRESETS={
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
       density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
-    // Maria (Yamashita) models: length/weight/type from the maker; depth and width are estimates
-    rapido:{name:'라피도 F160', desc:'마리아 롤링 펜슬 160mm', L:160,
-      up:[4,10,14,15,14,11,6], lo:[4,10,14,15,14,11,6], hw:[4,8,11.5,12,11,8.5,4.5],
-      density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
+    // Maria (Yamashita) Rapido: outline traced from the maker's F230 photo (back slopes down to a low tail,
+    // belly nearly straight, width constant 30-80 %). F160 uses the same outline with the cross-section
+    // x1.22 – at exact F230 proportions a 50 g F160 could not float, so the smaller model must be fuller.
+    rapido230:{name:'라피도 F230', desc:'마리아 롤링 펜슬 230mm', L:230, T:[0.03,0.10,0.22,0.45,0.70,0.90,1.0], eyeT:0.07,
+      up:[8.8,15.7,21.1,20.4,15.7,8.8,2], lo:[7.5,14.3,17,17,12.9,11.6,10.2], hw:[3,9.5,12.2,13.5,13.5,12.2,5.4],
+      density:0.55, weight:25, weightPos:65, hookW:10, hooks:[0.48,1], lineEye:'nose'},
+    rapido:{name:'라피도 F160', desc:'마리아 롤링 펜슬 160mm', L:160, T:[0.03,0.10,0.22,0.45,0.70,0.90,1.0], eyeT:0.07,
+      up:[7.5,13.3,17.9,17.3,13.3,7.5,1.7], lo:[6.4,12.1,14.4,14.4,10.9,9.8,8.7], hw:[2.5,8.1,10.4,11.5,11.5,10.4,4.6],
+      density:0.4, weight:23, weightPos:60, hookW:5, hooks:[0.48,1], lineEye:'nose'},
     legato:{name:'레가토 F190', desc:'마리아 플랫 펜슬 190mm', L:190,
       up:[4,10,15,17,16,12,6], lo:[4,9,14,16,15,11,6], hw:[3.5,7,9,9.5,9,7,4],
       density:0.5, weight:28, weightPos:45, hooks:[0.4,1], lineEye:'nose'},
@@ -429,29 +434,30 @@ function restoreCtl(st) {
   return changed;
 }
 
-// Linear interpolation of a profile array at station t (0 at the nose tip)
-function presetProfile(arr, t) {
-  const ts=[0,...PRESET_T], vs=[0,...arr];
+// Linear interpolation of a profile array at station t (0 at the nose tip); T = the preset's stations
+function presetProfile(arr, t, T) {
+  const ts=[0,...T], vs=[0,...arr];
   for(let i=1;i<ts.length;i++) if(t<=ts[i]) return vs[i-1]+(vs[i]-vs[i-1])*(t-ts[i-1])/(ts[i]-ts[i-1]);
   return vs[vs.length-1];
 }
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
+  const T=p.T||PRESET_T; // a preset may place its 7 stations where its outline changes
   const X=t=>p.L/2-t*p.L, noseX=X(p.nose||0), noseY=p.noseY||0;
   sidePts=[{x:noseX,y:noseY}]; topPts=[{x:noseX,y:0}];
-  PRESET_T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-p.up[i]}); topPts.push({x:X(t),y:-p.hw[i]}); });
-  for(let i=PRESET_T.length-1;i>=0;i--){ sidePts.push({x:X(PRESET_T[i]),y:p.lo[i]}); topPts.push({x:X(PRESET_T[i]),y:p.hw[i]}); }
+  T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-p.up[i]}); topPts.push({x:X(t),y:-p.hw[i]}); });
+  for(let i=T.length-1;i>=0;i--){ sidePts.push({x:X(T[i]),y:p.lo[i]}); topPts.push({x:X(T[i]),y:p.hw[i]}); }
   sidePts.push({x:noseX,y:noseY}); topPts.push({x:noseX,y:0});
 
   // Parts: eye on the head, hook eyes on the belly, line eye per lure type
-  const up=t=>presetProfile(p.up,t), lo=t=>presetProfile(p.lo,t);
-  const eyeT=0.12, half=(up(eyeT)+lo(eyeT))/2;
+  const up=t=>presetProfile(p.up,t,T), lo=t=>presetProfile(p.lo,t,T);
+  const eyeT=p.eyeT||0.12, half=(up(eyeT)+lo(eyeT))/2;
   eyes=[{x:X(eyeT), y:(lo(eyeT)-up(eyeT))/2-0.2*half}];
   // Belly hook eyes sit under the body; station 1 is a tail eye on the end face
   hooks=p.hooks.map(t=>t>=1?{x:X(1)-2, y:(lo(1)-up(1))/2}:{x:X(t), y:lo(t)+1.5});
   lineEyes=[p.lineEye==='back'?{x:X(0.2),y:-up(0.2)-2}
-          : p.lineEye==='chin'?{x:X(PRESET_T[0]),y:lo(PRESET_T[0])*0.6}
+          : p.lineEye==='chin'?{x:X(T[0]),y:lo(T[0])*0.6}
           : {x:noseX+2,y:noseY+(p.lip?2:0)}];
 
   setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
@@ -460,6 +466,7 @@ function applyPreset(cat, key) {
   setCtl('density',p.density);
   setCtl('weight',p.weight);
   setCtl('weightPos',p.weightPos);
+  setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
   document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
