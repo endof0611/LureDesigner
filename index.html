@@ -17,6 +17,15 @@
   .btn:hover{background:var(--border)}
   .btn-accent{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
   .btn-accent:hover{background:var(--accent2)}
+  .seg{display:flex;gap:4px;margin-bottom:8px}
+  .seg-btn{flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:11px;font-family:inherit;font-weight:600;cursor:pointer;transition:all 0.2s}
+  .seg-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+  .seg-btn:hover:not(.active){background:var(--border)}
+  .preset-list{display:flex;flex-direction:column;gap:5px}
+  .preset-btn{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left;transition:all 0.2s}
+  .preset-btn small{color:var(--text-dim);font-size:10px;font-weight:400}
+  .preset-btn.active{border-color:var(--accent);background:var(--accent-glow)}
+  .preset-btn:hover:not(.active){background:var(--border)}
   .btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
   .main{display:flex;flex:1;overflow:hidden}
   .sidebar{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
@@ -139,15 +148,11 @@
 <div class="main">
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
   <div class="sidebar" id="sidebar">
-    <div class="panel collapsed">
-      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">미노우 변형</div>
+    <div class="panel">
+      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">루어 프리셋</div>
       <div class="panel-body">
-      <div style="display:flex;flex-direction:column;gap:5px">
-        <button class="btn" onclick="loadVariant('standard')" style="width:100%;justify-content:center">🐟 스탠다드</button>
-        <button class="btn" onclick="loadVariant('slim')" style="width:100%;justify-content:center">🔹 슬림</button>
-        <button class="btn" onclick="loadVariant('fat')" style="width:100%;justify-content:center">🔶 팻</button>
-        <button class="btn" onclick="loadVariant('longbill')" style="width:100%;justify-content:center">📏 롱빌</button>
-      </div>
+      <div class="seg" id="presetCats"></div>
+      <div class="preset-list" id="presetList"></div>
       </div>
     </div>
     <div class="panel collapsed">
@@ -274,7 +279,7 @@
         <div class="view-canvas" id="topCont"><svg id="topSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
     </div>
-    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">측면: 16pt | 상면: 16pt</span></div>
+    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">플로팅 미노우 | 측면: 16pt | 상면: 16pt</span></div>
   </div>
 </div>
 
@@ -345,38 +350,109 @@ let lineEyes = [];
 let selectedPart = null; // {type, idx}
 
 
-function defSide() {
-  // 16 pts: idx 0=nose(y:0), 1-7=upper profile, 8=tail(y:0 implicit), 9-15=lower profile back to nose
-  // First and last point are same position (nose tip)
-  return [
-    {x:65,y:0},                                          // 0: nose
-    {x:58,y:-10},{x:40,y:-18},{x:20,y:-22},{x:-5,y:-20}, // 1-4: upper
-    {x:-30,y:-16},{x:-50,y:-10},{x:-65,y:-4},             // 5-7: upper tail
-    {x:-65,y:4},{x:-50,y:10},{x:-30,y:16},{x:-5,y:20},   // 8-11: lower tail
-    {x:20,y:22},{x:40,y:18},{x:58,y:10},                  // 12-14: lower
-    {x:65,y:0}                                             // 15: nose (=0)
-  ];
+// === LURE PRESETS ===
+// Profiles are given at fixed stations T (0 = nose, 1 = tail) and expanded into the 16-point layout:
+// up/lo = height above/below the centre line, hw = half width (mm). Optional nose: station of the nose
+// tip (> 0 recesses it behind the face, e.g. a popper cup), noseY: nose height offset.
+// Each preset also sets lip, material and parts so it can be edited from a complete starting point.
+const PRESET_T=[0.03,0.10,0.22,0.40,0.60,0.80,1.0];
+const PRESETS={
+  biggame:{label:'빅게임', items:{
+    aji:{name:'전갱이', desc:'다이빙 펜슬 180mm', L:180,
+      up:[5,12,18,20,16,8,3], lo:[5,12,19,21,17,8,3], hw:[4,8,10,10,8,4,2],
+      density:0.4, weight:30, weightPos:55, hooks:[0.38,0.72], lineEye:'nose'},
+    flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
+      up:[4,9,13,15,13,8,3], lo:[4,9,13,15,13,8,3], hw:[4,7,9,9,8,5,2],
+      density:0.4, weight:25, weightPos:60, hooks:[0.4,0.75], lineEye:'nose'},
+    popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
+      up:[17,19,20,19,15,8,3], lo:[17,19,20,19,15,8,3], hw:[15,16,16,15,11,6,2],
+      density:0.35, weight:20, weightPos:70, hooks:[0.4,0.78], lineEye:'chin'}
+  }},
+  seabass:{label:'농어', items:{
+    minnow:{name:'플로팅 미노우', desc:'립 미노우 125mm', L:125,
+      up:[4,8,10,10,9,6,2.5], lo:[4,8,10,10,9,6,2.5], hw:[3,6,7,7,6,4,1.5],
+      lip:{len:16,ang:30}, density:0.45, weight:5, weightPos:35, hooks:[0.38,0.75], lineEye:'nose'},
+    vibe:{name:'바이브레이션', desc:'립리스 싱킹 75mm', L:75, noseY:-2,
+      up:[6,13,15,14,11,7,2], lo:[5,10,12,12,10,6,2], hw:[3,4.5,5,5,4.5,3,1],
+      density:1.05, weight:14, weightPos:38, hooks:[0.35,0.78], lineEye:'back'},
+    spencil:{name:'싱킹 펜슬', desc:'슬림 싱킹 100mm', L:100,
+      up:[3,6,7.5,7.5,7,5,2], lo:[3,6,7.5,7.5,7,5,2], hw:[3,5,6,6,5.5,4,1.5],
+      density:1.05, weight:10, weightPos:40, hooks:[0.4,0.78], lineEye:'nose'}
+  }},
+  etc:{label:'기타', items:{
+    crank:{name:'크랭크베이트', desc:'배스 팻 바디 60mm', L:60,
+      up:[7,13,15,15,12,7,2.5], lo:[7,13,15,14,11,6,2.5], hw:[6,10,11,11,9,5,2],
+      lip:{len:16,ang:40}, density:0.5, weight:3, weightPos:35, hooks:[0.42,0.8], lineEye:'nose'},
+    walker:{name:'톱워터 펜슬', desc:'워킹 베이트 110mm', L:110,
+      up:[3,6,8,8,7.5,6,3], lo:[3,6,8,8,7.5,6,3], hw:[3,6,8,8,7.5,6,3],
+      density:0.4, weight:6, weightPos:85, hooks:[0.4,0.8], lineEye:'nose'},
+    jerk:{name:'저크베이트', desc:'서스펜드 100mm', L:100,
+      up:[4,9,11,11,9,6,2], lo:[4,9,11,11,9,6,2], hw:[3,4.5,5.5,5.5,5,3.5,1.5],
+      lip:{len:12,ang:25}, density:0.6, weight:2.5, weightPos:28, hooks:[0.38,0.75], lineEye:'nose'}
+  }}
+};
+let currentPreset={cat:'seabass', key:'minnow'};
+let presetViewCat='seabass';
+
+// Linear interpolation of a profile array at station t (0 at the nose tip)
+function presetProfile(arr, t) {
+  const ts=[0,...PRESET_T], vs=[0,...arr];
+  for(let i=1;i<ts.length;i++) if(t<=ts[i]) return vs[i-1]+(vs[i]-vs[i-1])*(t-ts[i-1])/(ts[i]-ts[i-1]);
+  return vs[vs.length-1];
 }
-function defTop() {
-  // 16 pts: same structure as side — nose at 0&15, tail region at 7&8
-  return [
-    {x:65,y:0},                                          // 0: nose
-    {x:55,y:-7},{x:35,y:-11},{x:15,y:-13},{x:-10,y:-12}, // 1-4: upper(left side)
-    {x:-35,y:-9},{x:-55,y:-5},{x:-65,y:-2},               // 5-7: tail upper
-    {x:-65,y:2},{x:-55,y:5},{x:-35,y:9},{x:-10,y:12},    // 8-11: tail lower
-    {x:15,y:13},{x:35,y:11},{x:55,y:7},                   // 12-14: lower(right side)
-    {x:65,y:0}                                             // 15: nose (=0)
-  ];
+
+function applyPreset(cat, key) {
+  const p=PRESETS[cat].items[key];
+  const X=t=>p.L/2-t*p.L, noseX=X(p.nose||0), noseY=p.noseY||0;
+  sidePts=[{x:noseX,y:noseY}]; topPts=[{x:noseX,y:0}];
+  PRESET_T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-p.up[i]}); topPts.push({x:X(t),y:-p.hw[i]}); });
+  for(let i=PRESET_T.length-1;i>=0;i--){ sidePts.push({x:X(PRESET_T[i]),y:p.lo[i]}); topPts.push({x:X(PRESET_T[i]),y:p.hw[i]}); }
+  sidePts.push({x:noseX,y:noseY}); topPts.push({x:noseX,y:0});
+
+  // Parts: eye on the head, hook eyes on the belly, line eye per lure type
+  const up=t=>presetProfile(p.up,t), lo=t=>presetProfile(p.lo,t);
+  const eyeT=0.12, half=(up(eyeT)+lo(eyeT))/2;
+  eyes=[{x:X(eyeT), y:(lo(eyeT)-up(eyeT))/2-0.2*half}];
+  hooks=p.hooks.map(t=>({x:X(t), y:lo(t)+1.5}));
+  lineEyes=[p.lineEye==='back'?{x:X(0.2),y:-up(0.2)-2}
+          : p.lineEye==='chin'?{x:X(PRESET_T[0]),y:lo(PRESET_T[0])*0.6}
+          : {x:noseX+2,y:noseY+(p.lip?2:0)}];
+
+  const setCtl=(id,v,txt)=>{ document.getElementById(id+'Slider').value=v; document.getElementById(id+'Val').textContent=txt; };
+  setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)),Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
+  const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
+  setCtl('hookSize',hookR,hookR);
+  setCtl('density',p.density,p.density.toFixed(2));
+  setCtl('weight',p.weight,p.weight);
+  setCtl('weightPos',p.weightPos,p.weightPos+'%');
+  document.getElementById('lipToggle').checked=!!p.lip;
+  if(p.lip){ setCtl('lipLen',p.lip.len,p.lip.len); setCtl('lipAng',p.lip.ang,p.lip.ang+'°'); }
+  document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
+  document.getElementById('symTop').checked=true;
+
+  currentPreset={cat,key}; presetViewCat=cat; updatePresetUI();
+  afterStateReplaced();
+  resetView();
+}
+function loadPreset(cat, key) {
+  saveH(); applyPreset(cat,key);
+  // On phones the sidebar covers the canvas; close it so the new shape is visible
+  if(window.innerWidth<=768 && document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+}
+function presetName() { return PRESETS[currentPreset.cat].items[currentPreset.key].name; }
+
+function showPresetCat(cat) { presetViewCat=cat; updatePresetUI(); }
+function updatePresetUI() {
+  document.getElementById('presetCats').innerHTML=Object.entries(PRESETS).map(([c,v])=>
+    '<button class="seg-btn'+(c===presetViewCat?' active':'')+'" onclick="showPresetCat(\''+c+'\')">'+v.label+'</button>').join('');
+  document.getElementById('presetList').innerHTML=Object.entries(PRESETS[presetViewCat].items).map(([k,v])=>
+    '<button class="preset-btn'+(presetViewCat===currentPreset.cat&&k===currentPreset.key?' active':'')+'" onclick="loadPreset(\''+presetViewCat+'\',\''+k+'\')">'+
+    '<span>'+v.name+'</span><small>'+v.desc+'</small></button>').join('');
 }
 
 function init() {
-  sidePts = defSide();
-  topPts = defTop();
   setupEvents();
-  updatePtsSliders();
-  syncSlidersFromPoints();
-  updatePartCounts();
-  render();
+  applyPreset(currentPreset.cat, currentPreset.key);
 }
 
 function toggleSidebar() {
@@ -408,12 +484,22 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() { selectedPart=null; updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render(); }
 function undoAction() { if(!undoStack.length)return; const h=undoStack.pop(); sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; afterStateReplaced(); }
-function resetShape() { saveH(); sidePts=defSide(); topPts=defTop(); eyes=[]; hooks=[]; lineEyes=[]; afterStateReplaced(); }
+// Back to the selected preset
+function resetShape() { saveH(); applyPreset(currentPreset.cat, currentPreset.key); }
 
 function setTool(t) { tool=t; document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); const e=document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1)); if(e)e.classList.add('active'); }
 
 function zoomAll(f) { viewZoom=Math.max(0.3,Math.min(8,viewZoom*f)); render(true); }
-function resetView() { viewZoom=1.4; sidePan={x:0,y:0}; topPan={x:0,y:0}; render(true); }
+// Zoom so the lure fills ~55% of the view width (nose sits at 65%) and ~60% of the shorter view height
+function fitZoom() {
+  const s=document.getElementById('sideCont'), t=document.getElementById('topCont');
+  const L=xRange(sidePts).mx-xRange(sidePts).mn;
+  const hs=yRange(sidePts), ht=yRange(topPts);
+  const tall=Math.max(Math.abs(hs.mn),hs.mx,Math.abs(ht.mn),ht.mx)*2;
+  const z=Math.min(s.clientWidth*0.55/L, Math.min(s.clientHeight,t.clientHeight)*0.6/tall);
+  return isFinite(z)&&z>0 ? Math.max(0.3,Math.min(8,z)) : 1.4;
+}
+function resetView() { viewZoom=fitZoom(); sidePan={x:0,y:0}; topPan={x:0,y:0}; render(true); }
 
 function updatePtsSliders() {
   ['side','top'].forEach(v=>{
@@ -645,7 +731,7 @@ function doRender() {
   renderView('side');
   renderView('top');
   const ss=symOn('side'), st=symOn('top');
-  document.getElementById('statusInfo').textContent='측면: '+sidePts.length+'pt'+(ss?' (대칭)':'')+' | 상면: '+topPts.length+'pt'+(st?' (대칭)':'');
+  document.getElementById('statusInfo').textContent=presetName()+' | 측면: '+sidePts.length+'pt'+(ss?' (대칭)':'')+' | 상면: '+topPts.length+'pt'+(st?' (대칭)':'');
   // Physics is recomputed once the drag ends (onUp re-renders)
   if(physPending && dragView===null){ physPending=false; calcPhysics(); }
 }
@@ -958,49 +1044,6 @@ function onUp(){
   const changed=dragIdx!==null || dragPartIdx!==null;
   endDrag();
   if(changed){ syncSlidersFromPoints(); render(); }
-}
-
-// Variants
-function loadVariant(name) {
-  const V = {
-    standard: { side: defSide(), top: defTop(), lipLen:30, lipAng:35 },
-    slim: {
-      side: [{x:70,y:0},{x:65,y:-7},{x:45,y:-12},{x:25,y:-14},{x:0,y:-13},{x:-25,y:-11},{x:-50,y:-7},{x:-70,y:-3},
-             {x:-70,y:3},{x:-50,y:7},{x:-25,y:11},{x:0,y:13},{x:25,y:14},{x:45,y:12},{x:65,y:7},{x:70,y:0}],
-      top:  [{x:70,y:0},{x:58,y:-5},{x:38,y:-8},{x:18,y:-9},{x:-8,y:-8},{x:-30,y:-6},{x:-52,y:-3},{x:-70,y:-1},
-             {x:-70,y:1},{x:-52,y:3},{x:-30,y:6},{x:-8,y:8},{x:18,y:9},{x:38,y:8},{x:58,y:5},{x:70,y:0}],
-      lipLen:30, lipAng:30
-    },
-    fat: {
-      side: [{x:55,y:0},{x:48,y:-14},{x:30,y:-28},{x:10,y:-32},{x:-15,y:-30},{x:-35,y:-24},{x:-50,y:-14},{x:-55,y:-4},
-             {x:-55,y:4},{x:-50,y:14},{x:-35,y:24},{x:-15,y:30},{x:10,y:32},{x:30,y:28},{x:48,y:14},{x:55,y:0}],
-      top:  [{x:55,y:0},{x:45,y:-10},{x:28,y:-16},{x:8,y:-18},{x:-15,y:-17},{x:-35,y:-13},{x:-48,y:-6},{x:-55,y:-2},
-             {x:-55,y:2},{x:-48,y:6},{x:-35,y:13},{x:-15,y:17},{x:8,y:18},{x:28,y:16},{x:45,y:10},{x:55,y:0}],
-      lipLen:20, lipAng:45
-    },
-    longbill: {
-      side: [{x:60,y:0},{x:52,y:-9},{x:38,y:-16},{x:18,y:-20},{x:-5,y:-18},{x:-28,y:-14},{x:-48,y:-9},{x:-60,y:-3},
-             {x:-60,y:3},{x:-48,y:9},{x:-28,y:14},{x:-5,y:18},{x:18,y:20},{x:38,y:16},{x:52,y:9},{x:60,y:0}],
-      top:  [{x:60,y:0},{x:50,y:-6},{x:32,y:-10},{x:12,y:-12},{x:-10,y:-11},{x:-32,y:-8},{x:-48,y:-4},{x:-60,y:-2},
-             {x:-60,y:2},{x:-48,y:4},{x:-32,y:8},{x:-10,y:11},{x:12,y:12},{x:32,y:10},{x:50,y:6},{x:60,y:0}],
-      lipLen:55, lipAng:25
-    }
-  };
-  const v=V[name]; if(!v)return;
-  saveH();
-  sidePts=v.side; topPts=v.top;
-  // Reset parts to empty (default)
-  eyes=[]; hooks=[]; lineEyes=[];
-  selectedPart=null; updatePartCounts();
-  // Reset toggles to defaults
-  document.getElementById('symSide').checked=false;
-  document.getElementById('lipToggle').checked=false;
-  document.getElementById('densitySlider').value=0.5;
-  document.getElementById('densityVal').textContent='0.50';
-  updatePtsSliders();
-  document.getElementById('lipLenSlider').value=v.lipLen; document.getElementById('lipLenVal').textContent=v.lipLen;
-  document.getElementById('lipAngSlider').value=v.lipAng; document.getElementById('lipAngVal').textContent=v.lipAng+'°';
-  applySym(); syncSlidersFromPoints(); render();
 }
 
 // === EXPORT ===
