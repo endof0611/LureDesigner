@@ -220,12 +220,14 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">물리 설정</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">소재 밀도 (g/cm³)</span><span class="slider-value" id="densityVal">0.50</span></div>
-        <input type="range" min="0.3" max="2.0" value="0.5" step="0.05" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
-      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">발사우드 0.4 | ABS 1.05 | 납 11.3</span></div>
+        <input type="range" min="0.1" max="2.0" value="0.5" step="0.05" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
+      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트 (g)</span><span class="slider-value" id="weightVal">5</span></div>
         <input type="range" min="0" max="30" value="5" step="0.5" id="weightSlider" oninput="document.getElementById('weightVal').textContent=this.value;calcPhysics()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">웨이트 위치 (앞↔뒤)</span><span class="slider-value" id="weightPosVal">50%</span></div>
         <input type="range" min="10" max="90" value="50" id="weightPosSlider" oninput="document.getElementById('weightPosVal').textContent=this.value+'%';calcPhysics()"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
+        <input type="range" min="0" max="5" value="1.5" step="0.1" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
         <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];calcPhysics()"></div>
       </div>
@@ -235,6 +237,7 @@
       <div class="panel-body">
       <div id="physicsOutput" style="font-size:11px;line-height:1.8">
         <div class="control-row"><span>부력 상태</span><span id="phBuoyancy" style="color:var(--accent);font-weight:600">-</span></div>
+        <div class="control-row"><span>정지 자세</span><span id="phPosture" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>예상 체적</span><span id="phVolume" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>예상 무게</span><span id="phWeight" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>잠행 깊이</span><span id="phDepth" style="color:var(--accent)">-</span></div>
@@ -539,7 +542,7 @@ function addPart(type) {
     lineEyes.push({x:mxx+5, y:0});
   }
   updatePartCounts();
-  render(true);
+  render();
 }
 
 function removePart(type) {
@@ -549,7 +552,7 @@ function removePart(type) {
   else if(type==='lineEye' && lineEyes.length>0) lineEyes.pop();
   selectedPart=null;
   updatePartCounts();
-  render(true);
+  render();
 }
 
 function updatePartCounts() {
@@ -797,7 +800,7 @@ function setupEvents() {
         if(selectedPart.type==='eye') eyes.splice(selectedPart.idx,1);
         else if(selectedPart.type==='hook') hooks.splice(selectedPart.idx,1);
         else if(selectedPart.type==='lineEye') lineEyes.splice(selectedPart.idx,1);
-        selectedPart=null; updatePartCounts(); render(true);
+        selectedPart=null; updatePartCounts(); render();
         e.preventDefault();
       }
     }
@@ -1046,7 +1049,26 @@ function dlSVG(){
 }
 
 // === PHYSICS CALCULATION ===
-// Height (side) or width (top) of the outline at a given X
+// Simplified model: elliptical cross-sections for the body, point masses for weight/hooks/lip.
+// Coordinates follow the side view: +x toward the nose, +z (= side-view y) downward, mm.
+const WATER=1.0, LEAD=11.3, STEEL=7.8, LIP_DENSITY=1.2, LIP_THICK=1.2; // g/cm³; lip thickness mm
+const SPEED_MS=[0,0.3,0.5,0.8,1.1,1.5]; // retrieve speed level → m/s
+
+// Rendered outline (same Bezier as smoothPath) as a dense polyline
+function flattenSmooth(pts, sm, steps) {
+  const n=pts.length, out=[];
+  for(let i=0;i<n;i++){
+    const p0=pts[(i-1+n)%n],p1=pts[i],p2=pts[(i+1)%n],p3=pts[(i+2)%n];
+    const c1x=p1.x+(p2.x-p0.x)*sm, c1y=p1.y+(p2.y-p0.y)*sm;
+    const c2x=p2.x-(p3.x-p1.x)*sm, c2y=p2.y-(p3.y-p1.y)*sm;
+    for(let k=0;k<steps;k++){
+      const t=k/steps, u=1-t, a=u*u*u, b=3*u*u*t, c=3*u*t*t, d=t*t*t;
+      out.push({x:a*p1.x+b*c1x+c*c2x+d*p2.x, y:a*p1.y+b*c1y+c*c2y+d*p2.y});
+    }
+  }
+  return out;
+}
+// Vertical extent {mn,mx} of a closed outline at a given X, or null outside it
 function spanAt(pts, x) {
   let mn=Infinity, mx=-Infinity;
   for(let i=0;i<pts.length;i++){
@@ -1055,7 +1077,88 @@ function spanAt(pts, x) {
     const y=a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x);
     if(y<mn)mn=y; if(y>mx)mx=y;
   }
-  return mx>mn?mx-mn:0;
+  return mx>mn?{mn,mx}:null;
+}
+function polyArea(pts) {
+  let s=0;
+  for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; s+=a.x*b.y-b.x*a.y; }
+  return Math.abs(s)/2;
+}
+
+// Part of an ellipse (semi-axes a,b) below a horizontal chord at t·b from its centre (t in -1..1, +down):
+// area = a·b·f, centroid = centre + b·c
+function ellipseSeg(t) {
+  if(t<=-1) return {f:Math.PI, c:0};
+  if(t>=1) return {f:0, c:1};
+  const s=Math.sqrt(1-t*t), f=Math.acos(t)-t*s;
+  return {f, c:f>1e-9?(2/3)*s*s*s/f:1};
+}
+
+// Rest pitch (deg, + = nose down): the posture where the centre of gravity sits straight below the
+// centre of buoyancy. For a floating lure the waterline is solved at each pitch so that the submerged
+// part carries the weight. slices: body cross-sections; parts: small items, always counted as submerged.
+// Returns a number, 'neutral' (no restoring moment) or 'unstable' (would capsize).
+function restPitch(slices, parts, M, cg) {
+  const pv=parts.reduce((s,i)=>s+i.v*1000,0); // mm³
+  const pvx=parts.reduce((s,i)=>s+i.v*1000*i.x,0), pvz=parts.reduce((s,i)=>s+i.v*1000*i.z,0);
+  const fullV=slices.reduce((s,q)=>s+Math.PI*q.a*q.b*q.dx,0)+pv;
+  const target=M/WATER*1000;
+  const submerged=(sn,cs,c)=>{
+    // body point (x,z) is under water when x·sinθ + z·cosθ > c
+    let v=pv, mx=pvx, mz=pvz;
+    for(const q of slices){
+      const e=ellipseSeg(((c-q.x*sn)/cs-q.zc)/q.b);
+      const dv=q.a*q.b*e.f*q.dx;
+      v+=dv; mx+=q.x*dv; mz+=(q.zc+q.b*e.c)*dv;
+    }
+    return {v,mx,mz};
+  };
+  // Horizontal offset of CB ahead of CG at pitch th; > 0 lifts the nose (pitch decreases)
+  const torque=th=>{
+    const sn=Math.sin(th), cs=Math.cos(th);
+    let r;
+    if(target>=fullV) r=submerged(sn,cs,-1e9);
+    else {
+      let lo=Infinity, hi=-Infinity;
+      for(const q of slices){ lo=Math.min(lo,q.x*sn+(q.zc-q.b)*cs); hi=Math.max(hi,q.x*sn+(q.zc+q.b)*cs); }
+      for(let i=0;i<28;i++){ const c=(lo+hi)/2; if(submerged(sn,cs,c).v>target) lo=c; else hi=c; }
+      r=submerged(sn,cs,(lo+hi)/2);
+    }
+    return (r.mx/r.v*cs-r.mz/r.v*sn)-(cg.x*cs-cg.z*sn);
+  };
+  const lim=85*Math.PI/180, steps=40;
+  const ths=[], fs=[];
+  for(let i=0;i<=steps;i++){ const th=-lim+2*lim*i/steps; ths.push(th); fs.push(torque(th)); }
+  if(Math.max(...fs.map(Math.abs))<0.05) return 'neutral';
+  // Stable equilibria: torque rises through zero
+  let best=null;
+  for(let i=0;i<steps;i++){
+    if(fs[i]<=0 && fs[i+1]>0){
+      let a=ths[i], b=ths[i+1];
+      for(let k=0;k<20;k++){ const m=(a+b)/2; if(torque(m)<=0) a=m; else b=m; }
+      const th=(a+b)/2;
+      if(best===null||Math.abs(th)<Math.abs(best)) best=th;
+    }
+  }
+  if(best!==null) return best*180/Math.PI;
+  if(fs.every(f=>f>0)) return -90; // hangs tail-down
+  if(fs.every(f=>f<0)) return 90;  // hangs nose-down
+  return 'unstable';
+}
+
+// Cast distance (m) with quadratic air drag, assuming the same tackle for every lure:
+// launch speed grows with lure mass as the rod loads (32 m/s limit), and the line adds a fixed drag area.
+function castRange(massG, CdA_cm2) {
+  const m=massG/1000, v0=32*massG/(massG+4), ang=30*Math.PI/180;
+  const k=0.5*1.2*(CdA_cm2+0.35)*1e-4/m; // air 1.2 kg/m³
+  let x=0, y=1.5, vx=v0*Math.cos(ang), vy=v0*Math.sin(ang);
+  const dt=0.005;
+  while(y>0 && x<300){
+    const v=Math.hypot(vx,vy);
+    vx-=k*v*vx*dt; vy-=(9.81+k*v*vy)*dt;
+    x+=vx*dt; y+=vy*dt;
+  }
+  return x;
 }
 
 let lastPhys=null;
@@ -1069,88 +1172,132 @@ function calcPhysics() {
   const density=parseFloat(document.getElementById('densitySlider').value);
   const addWeight=parseFloat(document.getElementById('weightSlider').value);
   const weightPos=parseInt(document.getElementById('weightPosSlider').value);
+  const hookW=parseFloat(document.getElementById('hookWeightSlider').value);
   const speed=parseInt(document.getElementById('speedSlider').value);
+  const lip=lipParams();
 
-  // Volume: integrate elliptical cross-sections whose axes are the side height and top width at each X
-  const N=64, dx=L/N;
-  let vol_mm3=0;
+  // Body: integrate elliptical cross-sections (side height × top width) along the rendered outline
+  const side=flattenSmooth(sidePts,SM,12), top=flattenSmooth(topPts,SM,12);
+  const N=96, dx=L/N;
+  let vBody=0, mxB=0, mzB=0, aMax=0;
+  const slices=[];
   for(let k=0;k<N;k++){
     const x=sx.mn+(k+0.5)*dx;
-    vol_mm3+=Math.PI/4*spanAt(sidePts,x)*spanAt(topPts,x)*dx;
+    const s=spanAt(side,x), t=spanAt(top,x);
+    if(!s||!t) continue;
+    const a=Math.PI/4*(s.mx-s.mn)*(t.mx-t.mn), dv=a*dx;
+    vBody+=dv; mxB+=x*dv; mzB+=(s.mn+s.mx)/2*dv;
+    slices.push({x, zc:(s.mn+s.mx)/2, a:(t.mx-t.mn)/2, b:(s.mx-s.mn)/2, dx});
+    if(a>aMax) aMax=a;
   }
-  const vol_cm3=vol_mm3/1000;
-  const bodyWeight=vol_cm3*density;
-  const totalWeight=bodyWeight+addWeight;
+  if(vBody<=0) return;
+  const vol_cm3=vBody/1000;
 
-  // Buoyancy
-  const waterDisplacement=vol_cm3*1.0; // water density 1.0 g/cm³
-  const buoyancyRatio=waterDisplacement>0?totalWeight/waterDisplacement:Infinity;
-  let buoyancyState, buoyancyColor;
-  if(buoyancyRatio<0.92){buoyancyState='플로팅(F)';buoyancyColor='#10b981';}
-  else if(buoyancyRatio<1.05){buoyancyState='서스펜딩(SP)';buoyancyColor='#f59e0b';}
-  else{buoyancyState='싱킹(S)';buoyancyColor='#f43f5e';}
+  // Every component: mass m (g), displaced volume v (cm³), position x/z (mm)
+  const items=[{m:vol_cm3*density, v:vol_cm3, x:mxB/vBody, z:mzB/vBody}];
+  if(addWeight>0){
+    // Internal weight sits low in the belly, weightPos % of the length back from the nose
+    const wx=sx.mx-L*weightPos/100, s=spanAt(side,wx);
+    items.push({m:addWeight, v:addWeight/LEAD, x:wx, z:s?(s.mn+s.mx)/2+(s.mx-s.mn)*0.25:0});
+  }
+  // Treble hook + split ring on each hook eye, hanging ~5 mm below it
+  hooks.forEach(h=>items.push({m:hookW, v:hookW/STEEL, x:h.x, z:h.y+5}));
+  if(lip.on){
+    const g=lipGeom(sx.mx,0,lip.len,lip.ang*Math.PI/180,6);
+    const v=polyArea(g.hull)*LIP_THICK/1000;
+    items.push({m:v*LIP_DENSITY, v, x:g.hull.reduce((s,p)=>s+p.x,0)/6, z:g.hull.reduce((s,p)=>s+p.y,0)/6});
+  }
+  const M=items.reduce((s,i)=>s+i.m,0), V=items.reduce((s,i)=>s+i.v,0);
+  const cg={x:items.reduce((s,i)=>s+i.m*i.x,0)/M, z:items.reduce((s,i)=>s+i.m*i.z,0)/M};
+  const totalWeight=M;
 
-  // Diving depth based on lip
-  const {on:hasLip,len:lipLen,ang:lipAng}=lipParams();
+  // Buoyancy (fresh water)
+  const buoyancyRatio=M/(V*WATER);
+  let buoyancyState, buoyancyColor, buoyClass;
+  if(buoyancyRatio<0.95){buoyancyState='플로팅(F)';buoyancyColor='#10b981';buoyClass='F';}
+  else if(buoyancyRatio<0.98){buoyancyState='슬로우 플로팅(SF)';buoyancyColor='#34d399';buoyClass='F';}
+  else if(buoyancyRatio<=1.02){buoyancyState='서스펜딩(SP)';buoyancyColor='#f59e0b';buoyClass='SP';}
+  else if(buoyancyRatio<=1.05){buoyancyState='슬로우 싱킹(SS)';buoyancyColor='#fb923c';buoyClass='S';}
+  else{buoyancyState='싱킹(S)';buoyancyColor='#f43f5e';buoyClass='S';}
+
+  // Rest posture (pitch in degrees, + = nose down)
+  const rp=restPitch(slices,items.slice(1),M,cg);
+  let pitch=null, posture;
+  if(rp==='neutral') posture='중립 (복원력 없음)';
+  else if(rp==='unstable') posture='불안정 (뒤집힘 위험)';
+  else {
+    pitch=rp;
+    posture=Math.abs(pitch)<5?'수평':(pitch>0?'머리 숙임 ':'꼬리 숙임 ')+Math.abs(pitch).toFixed(0)+'°';
+  }
+
+  // Running depth: approaches a lip-dependent maximum as the retrieve speeds up
   let depth=0;
-  if(hasLip){
-    const lipFactor=lipLen/30; // normalized
-    const angFactor=1-lipAng/90; // steeper angle = shallower
-    depth=lipFactor*angFactor*3.0*speed*0.5; // rough meters
+  if(lip.on){
+    const lipFactor=lip.len/30; // normalized
+    const angFactor=1-lip.ang/90; // steeper angle = shallower
+    depth=5.8*lipFactor*angFactor*(1-Math.exp(-speed/2));
+    if(pitch!==null) depth*=1+Math.max(-20,Math.min(20,pitch))*0.01; // nose-down helps the lip bite
     depth=Math.max(0,Math.min(depth,8));
   }
+  // Sink rate: net weight balanced by broadside drag (Cd≈1 on the top-view area)
+  const sinkRate=buoyClass==='S'?Math.sqrt(2*(M-V*WATER)/1000*9.81/(1000*polyArea(top)*1e-6)):0;
+  let depthText;
+  if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
+  else depthText=buoyClass==='S'?'침강 '+(sinkRate*100).toFixed(0)+' cm/s':buoyClass==='SP'?'정지 수심 유지':'표층 (립 없음)';
 
-  // Wobble type based on H/L ratio
+  // Wobble amplitude from H/L; frequency ~ speed / body height (Strouhal-like, St≈0.2)
   const hlRatio=H/L;
+  const wobbleHz=0.2*SPEED_MS[speed]/(H/1000);
   let wobbleType,wobbleWidth;
   if(hlRatio>0.45){wobbleType='와이드 워블';wobbleWidth='넓음';}
   else if(hlRatio>0.3){wobbleType='미디엄 워블';wobbleWidth='중간';}
   else if(hlRatio>0.2){wobbleType='타이트 워블';wobbleWidth='좁음';}
-  else{wobbleType='롤링 위주';wobbleWidth='매우 좁음';}
+  else{wobbleType='슈퍼 타이트 워블';wobbleWidth='매우 좁음';}
 
   // Rolling tendency based on W/H ratio
   const whRatio=W/H;
   let rollType;
   if(whRatio>0.8) rollType='강한 롤링';
   else if(whRatio>0.5) rollType='롤링+워블';
-  else if(whRatio>0.3) rollType='워블 위주';
-  else rollType='워블 주도';
+  else rollType='워블 위주';
 
-  // Casting distance (relative)
-  const aeroFactor=totalWeight/(H*W/100);
-  let castDist;
-  if(aeroFactor>1.2) castDist='장거리';
-  else if(aeroFactor>0.7) castDist='중거리';
-  else castDist='단거리';
+  // Casting: the heavy end leads in flight. CG toward the tail → flies tail-first and stable (low Cd);
+  // CG toward the nose → lip and tail catch air and the lure tumbles.
+  const cgFromNose=(sx.mx-cg.x)/L;
+  const Cd=Math.max(0.35,Math.min(0.65,0.38+0.6*(0.5-cgFromNose)))+(lip.on?0.05:0);
+  const castM=castRange(totalWeight,Cd*aMax/100);
+  const castDist=castM>=55?'장거리':castM>=40?'중거리':'단거리';
 
   // Weight position effect comment
   let comment='';
-  if(weightPos<35) comment='💡 웨이트가 앞쪽 → 노즈다이브 경향, 빠른 잠행. ';
-  else if(weightPos>65) comment='💡 웨이트가 뒤쪽 → 꼬리 흔들림 증가, 느린 잠행. ';
+  if(weightPos<35) comment='💡 웨이트가 앞쪽 → 노즈다이브 경향, 빠른 잠행. 비행 자세는 불안정. ';
+  else if(weightPos>65) comment='💡 웨이트가 뒤쪽 → 비행 안정(비거리↑), 느린 잠행. ';
   else comment='💡 웨이트 중심 배치 → 안정적 수평 자세. ';
+  if(posture.startsWith('불안정')) comment+='⚠ 무게중심이 부력중심보다 높아 뒤집힐 수 있음. ';
 
   if(hlRatio>0.4) comment+='높은 바디 → 강한 수압 저항으로 어필력 강함.';
   else if(hlRatio<0.2) comment+='슬림 바디 → 저항 적어 자연스러운 액션.';
   else comment+='균형 잡힌 바디 비율.';
 
-  if(hasLip && lipAng<20) comment+=' 낮은 립 각도 → 깊은 잠행.';
-  else if(hasLip && lipAng>60) comment+=' 높은 립 각도 → 얕은 레인지, 강한 워블.';
+  if(lip.on && lip.ang<20) comment+=' 낮은 립 각도 → 깊은 잠행.';
+  else if(lip.on && lip.ang>60) comment+=' 높은 립 각도 → 얕은 레인지, 강한 워블.';
 
   // Update UI
   const set=(id,t)=>document.getElementById(id).textContent=t;
   set('phBuoyancy',buoyancyState);
   document.getElementById('phBuoyancy').style.color=buoyancyColor;
+  set('phPosture',posture);
   set('phVolume',vol_cm3.toFixed(1)+' cm³');
   set('phWeight',totalWeight.toFixed(1)+' g');
-  set('phDepth',hasLip?(depth.toFixed(1)+' m'):'표층 (립 없음)');
+  set('phDepth',depthText);
   set('phWobble',wobbleType);
-  set('phWobbleW',wobbleWidth);
+  set('phWobbleW',wobbleWidth+' · 약 '+wobbleHz.toFixed(1)+' Hz');
   set('phRoll',rollType);
-  set('phCast',castDist+' ('+totalWeight.toFixed(0)+'g)');
+  set('phCast',castDist+' (약 '+castM.toFixed(0)+' m)');
   set('phComment',comment);
 
   // Store for animation
-  lastPhys={L,H,W,hlRatio,whRatio,depth,wobbleType,buoyancyRatio,speed,lipLen,lipAng,hasLip,weightPos};
+  lastPhys={L,H,W,hlRatio,whRatio,depth,wobbleType,wobbleHz,buoyancyRatio,buoyancyState,pitch,speed,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on};
 }
 
 // === ANIMATION ENGINE ===
@@ -1211,7 +1358,7 @@ function animLoop(ts){
 function drawAnimation(){
   const ctx=animCtx;
   const cw=ANIM_W, ch=ANIM_H;
-  const ph=lastPhys||{L:130,H:44,W:24,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',speed:3,lipLen:30,lipAng:35,hasLip:true,weightPos:50,buoyancyRatio:1.0};
+  const ph=lastPhys||{L:130,H:44,W:24,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',wobbleHz:3.6,buoyancyState:'-',pitch:0,speed:3,lipLen:30,lipAng:35,hasLip:true};
 
   ctx.clearRect(0,0,cw,ch);
 
@@ -1246,8 +1393,9 @@ function drawAnimation(){
   const baseY=Math.min(depthPx,ch-60);
 
   // Wobble oscillation
-  const wobbleFreq=spd*2.5;
-  const wobbleAmp=ph.hlRatio*18*spd*0.4;
+  // Real wobble frequency (capped so it stays visible); amplitude depends on body shape, not speed
+  const wobbleFreq=2*Math.PI*Math.min(ph.wobbleHz,8);
+  const wobbleAmp=ph.hlRatio*18*1.2;
   const wobbleAngle=Math.sin(t*wobbleFreq)*wobbleAmp*(Math.PI/180);
 
   // Rolling
@@ -1264,7 +1412,8 @@ function drawAnimation(){
   ctx.save();
   ctx.translate(lureX,lureY);
   if(animView==='side'){
-    ctx.rotate(wobbleAngle*0.3); // pitch
+    // Line tension pulls most of the rest posture out while retrieving
+    ctx.rotate(wobbleAngle*0.3+(ph.pitch||0)*0.3*Math.PI/180); // pitch
     drawLureSide(ctx,ph);
   } else {
     ctx.rotate(wobbleAngle); // full yaw visible from top
@@ -1308,8 +1457,7 @@ function drawAnimation(){
   // Info text
   document.getElementById('animInfo').textContent=
     (animView==='side'?'측면':'상면')+' | '+
-    ph.wobbleType+' | 잠행 '+ph.depth.toFixed(1)+'m | '+
-    (ph.buoyancyRatio<0.92?'플로팅':ph.buoyancyRatio<1.05?'서스펜딩':'싱킹');
+    ph.wobbleType+' '+ph.wobbleHz.toFixed(1)+'Hz | 잠행 '+ph.depth.toFixed(1)+'m | '+ph.buoyancyState;
 }
 
 // Closed smooth outline (same curve as smoothPath) scaled by sc
