@@ -335,6 +335,7 @@ let sidePan = {x:0,y:0}, topPan = {x:0,y:0};
 let undoStack = [];
 const MAX_HIST = 40;
 let lastSaveKey = null, lastSaveT = 0;
+let lenBase = null; // proportional mode: values at the start of a length drag, so weights scale without rounding drift
 
 // Drag state
 let dragView = null; // 'side' or 'top'
@@ -354,7 +355,8 @@ let selectedPart = null; // {type, idx}
 
 
 // === LURE PRESETS ===
-// Profiles are given at fixed stations T (0 = nose, 1 = tail) and expanded into the 16-point layout:
+// Profiles are given at stations T (0 = nose, 1 = tail; default PRESET_T) and expanded into the point layout
+// (nose, upper profile, lower profile back, nose: 2·T.length+2 points):
 // up/lo = height above/below the centre line, hw = half width (mm). Optional nose: station of the nose
 // tip (> 0 recesses it behind the face, e.g. a popper cup), noseY: nose height offset.
 // Each preset also sets lip, material and parts so it can be edited from a complete starting point.
@@ -449,7 +451,7 @@ function presetProfile(arr, t, T) {
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
-  const T=p.T||PRESET_T; // a preset may place its 7 stations where its outline changes
+  const T=p.T||PRESET_T; // a preset may set its own stations (count and placement) where its outline changes
   const X=t=>p.L/2-t*p.L, noseX=X(p.nose||0), noseY=p.noseY||0;
   sidePts=[{x:noseX,y:noseY}]; topPts=[{x:noseX,y:0}];
   T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-p.up[i]}); topPts.push({x:X(t),y:-p.hw[i]}); });
@@ -532,7 +534,10 @@ function saveHGrouped(key) {
   if(key!==lastSaveKey||now-lastSaveT>800) saveH();
   lastSaveKey=key; lastSaveT=now;
 }
-function afterStateReplaced() { selectedPart=null; updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render(); }
+function afterStateReplaced() {
+  selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
+  updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render();
+}
 function undoAction() {
   if(!undoStack.length)return;
   const h=undoStack.pop();
@@ -599,14 +604,12 @@ function changePts(view, n) {
   applySym(); syncSlidersFromPoints(); render();
 }
 
-// Proportional mode: values at the start of a length drag, so weights scale without rounding drift
-let lenBase=null;
 function scaleLengthAll(v) {
   v=parseInt(v); document.getElementById('lenVal').textContent=v;
   const prop=document.getElementById('propToggle').checked;
   if(lastSaveKey!=='len'||Date.now()-lastSaveT>800||!lenBase){
     const r=xRange(sidePts), val=id=>parseFloat(document.getElementById(id+'Slider').value);
-    lenBase={L:r.mx-r.mn, weight:val('weight'), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize')};
+    lenBase={L:r.mx-r.mn, weight:val('weight'), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   saveHGrouped('len');
   ['side','top'].forEach(view=>{
@@ -618,10 +621,11 @@ function scaleLengthAll(v) {
     if(prop) (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.y*=sc));
   });
   if(prop){
-    // Same lure at another size: masses follow the volume (length³), part sizes the length
+    // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
     setCtl('weight',half(lenBase.weight*r**3)); setCtl('hookWeight',half(lenBase.hookWeight*r**3));
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
+    setCtl('lipLen',Math.round(lenBase.lipLen*r));
     syncSlidersFromPoints();
   } else updateSizeInfo();
   render();
@@ -651,11 +655,10 @@ function scaleTopWidth(v) {
   updateSizeInfo(); render();
 }
 
+// From the outline itself: the sliders clamp to their ranges (e.g. length 40-250 mm)
 function updateSizeInfo() {
-  const l=document.getElementById('lenSlider').value;
-  const h=document.getElementById('sideHSlider').value;
-  const w=document.getElementById('topWSlider').value;
-  document.getElementById('sizeInfo').textContent=l+' × '+h+' × '+w+' mm';
+  const x=xRange(sidePts), y=yRange(sidePts), w=yRange(topPts);
+  document.getElementById('sizeInfo').textContent=Math.round(x.mx-x.mn)+' × '+Math.round(y.mx-y.mn)+' × '+Math.round(w.mx-w.mn)+' mm';
 }
 
 // Force both views to have identical X range (length):
@@ -1464,7 +1467,6 @@ function calcPhysics() {
   const castM=castRange(totalWeight,Cd*aMax/100);
   const castDist=castM>=55?'장거리':castM>=40?'중거리':'단거리';
 
-  // Weight position effect comment
   // Comment follows the computed rest posture, plus the weight's effect on casting
   let comment;
   if(rp.pitch==='unstable') comment='⚠ 무게중심이 부력중심보다 높아 뒤집힐 수 있음. ';
@@ -1560,7 +1562,7 @@ function animLoop(ts){
 function drawAnimation(){
   const ctx=animCtx;
   const cw=ANIM_W, ch=ANIM_H;
-  const ph=lastPhys||{L:130,H:44,W:24,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',wobbleHz:3.6,buoyancyState:'-',pitch:0,speed:3,lipLen:30,lipAng:35,hasLip:true};
+  const ph=lastPhys||{H:44,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',wobbleHz:3.6,buoyancyState:'-',pitch:0,speed:3,lipLen:30,lipAng:35,hasLip:true};
 
   ctx.clearRect(0,0,cw,ch);
 
@@ -1702,14 +1704,14 @@ function drawLureSide(ctx,ph){
 function drawLureTop(ctx,ph){
   const sc=0.9;
   traceBody(ctx,topPts,sc);
-  const mxx=xRange(topPts).mx, nose=topPts[0].x;
+  const nose=topPts[0].x;
 
-  // Eyes (both sides from top)
+  // Eyes on both flanks, at the eye's position along the body
   if(eyes.length>0){
-    let mxy=0; topPts.forEach(p=>{mxy=Math.max(mxy,Math.abs(p.y));});
-    const ex=(mxx-18)*sc;
-    ctx.beginPath();ctx.arc(ex,-mxy*sc*0.45,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=0.8;ctx.stroke();
-    ctx.beginPath();ctx.arc(ex,mxy*sc*0.45,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.stroke();
+    const ex=eyes[0].x, s=spanAt(flattenSmooth(topPts,SM,8),ex), half=s?(s.mx-s.mn)/2:0;
+    for(const side of [-1,1]){
+      ctx.beginPath();ctx.arc(ex*sc,side*half*0.8*sc,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=0.8;ctx.stroke();
+    }
   }
 
   // Lip from top
