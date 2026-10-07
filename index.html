@@ -371,11 +371,12 @@ const PRESETS={
     // Maria (Yamashita) diving pencils, defined at a 200 mm base and scaled proportionally with the length
     // slider (prop:true), so 160 / 230 mm keep the same outline. Weights scale with volume (length³).
     // Profiles are measured in the lure's own frame: the through-wire axis from line eye to tail eye.
-    // Rapido: side traced from a photo of a real F230, top from the maker's photo (blunt, wide head,
-    // narrower tail), scaled to 200 mm. 230 mm → ~100 g.
+    // Rapido: side traced from a photo of a real F230; top view derived from the side profile with a
+    // constant cross-section ratio W/H = 0.65 (top-view photos give a 27-29 mm max width at 230 mm).
+    // Scaled to 200 mm. 230 mm → ~100 g.
     rapido:{name:'라피도', desc:'마리아 롤링 펜슬 · 200mm 기준', L:200, prop:true, T:[0.03,0.10,0.22,0.45,0.70,0.90,1.0], eyeT:0.05,
-      up:[9.1,14.8,19.1,19.9,16.7,11,3.2], lo:[7.5,12.6,16.7,15.8,12.2,9.7,7], hw:[7.5,10.6,11.7,11.7,11.7,8.3,2.3],
-      density:0.35, weight:29, weightPos:70, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
+      up:[9.1,14.8,19.1,19.9,16.7,11,3.2], lo:[7.5,12.6,16.7,15.8,12.2,9.7,7], hw:[5.4,8.9,11.6,11.6,9.4,6.7,3.3],
+      density:0.45, weight:24, weightPos:60, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
     // Legato: outline traced from photos of a real F190 (side + top). Unlike the Rapido the back stays high
     // and the belly rises steadily toward the tail. Pauses almost level.
     // F190 60 g → ~70 g at 200 mm.
