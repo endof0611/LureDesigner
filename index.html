@@ -170,8 +170,8 @@
         <input type="range" min="8" max="32" value="16" id="sidePtsSlider" onchange="changePts('side',this.value)" oninput="document.getElementById('sidePtsVal').textContent=this.value"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">16</span></div>
         <input type="range" min="8" max="32" value="16" id="topPtsSlider" onchange="changePts('top',this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
-      <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">0.17</span></div>
-        <input type="range" min="0" max="100" value="17" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);render()"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">1.00</span></div>
+        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
         <input type="range" min="40" max="250" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
       <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle"><span class="toggle-slider"></span></label></div>
@@ -282,7 +282,7 @@
         <div class="view-canvas" id="topCont"><svg id="topSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
     </div>
-    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">플로팅 미노우 | 측면: 16pt | 상면: 16pt</span></div>
+    <div class="status-bar"><span id="statusCoords">X: 0 Y: 0</span><span id="statusInfo">립리스 미노우 | 측면: 24pt | 상면: 24pt</span></div>
   </div>
 </div>
 
@@ -324,7 +324,7 @@
 // mirrored half is written back into the array, so the stored points
 // always match what is displayed, exported and used for physics.
 let sidePts = [], topPts = [];
-let SM = 0.17, SW = 1;
+let SM = 1, SW = 1;
 const FC = '#ffffff', SC = '#000000';
 const MIN_PTS = 8, MAX_PTS = 32; // same as the point-count sliders
 const HAS_TOUCH = ('ontouchstart' in window);
@@ -392,9 +392,12 @@ const PRESETS={
       density:0.4, weight:25, weightPos:85, hooks:[0.4,1], lineEye:'chin'}
   }},
   seabass:{label:'농어', items:{
-    minnow:{name:'플로팅 미노우', desc:'립 미노우 125mm', L:125,
-      up:[4,8,10,10,9,6,2.5], lo:[4,8,10,10,9,6,2.5], hw:[3,6,7,7,6,4,1.5],
-      lip:{len:16,ang:30}, density:0.45, weight:5, weightPos:35, hooks:[0.38,0.75], lineEye:'nose'},
+    // Lipless (slant-head) minnow: no lip; the face is cut back at an angle from the forehead down to the
+    // chin, where the line eye sits, so the body rides above the line-eye axis and the face bites the water
+    minnow:{name:'립리스 미노우', desc:'슬랜트 헤드 125mm', L:125, T:[0.02,0.05,0.09,0.15,0.25,0.40,0.55,0.70,0.85,0.95,1.0], eyeT:0.10,
+      up:[3,6.5,9.5,11.5,12.5,12.8,12.3,11,8.5,6,4.5], lo:[1.2,2.5,3.6,4.6,5.4,5.7,5.4,4.7,3.6,2.6,2],
+      hw:[2,4.5,6,6.8,7,7,6.7,6,4.8,3.6,2.8],
+      density:0.45, weight:5, weightPos:35, hooks:[0.38,0.75], lineEye:'nose'},
     vibe:{name:'바이브레이션', desc:'립리스 싱킹 75mm', L:75, noseY:-2,
       up:[6,13,15,14,11,7,2], lo:[5,10,12,12,10,6,2], hw:[3,4.5,5,5,4.5,3,1],
       density:1.05, weight:14, weightPos:38, hooks:[0.35,0.78], lineEye:'back'},
@@ -442,6 +445,25 @@ function restoreCtl(st) {
   return changed;
 }
 
+// Stations used when a preset defines fewer than 11: dense where outlines bend (head and tail)
+const DENSE_T=[0.02,0.05,0.10,0.16,0.24,0.34,0.46,0.58,0.70,0.81,0.91,1.0];
+// Monotone cubic (Fritsch-Carlson) interpolation through (xs, ys): smooth, passes every station, no overshoot
+function pchip(xs, ys, x) {
+  const n=xs.length;
+  if(x<=xs[0]) return ys[0];
+  if(x>=xs[n-1]) return ys[n-1];
+  const h=[], d=[];
+  for(let i=0;i<n-1;i++){ h.push(xs[i+1]-xs[i]); d.push((ys[i+1]-ys[i])/h[i]); }
+  const m=[d[0]];
+  for(let i=1;i<n-1;i++){
+    if(d[i-1]*d[i]<=0) m.push(0);
+    else { const w1=2*h[i]+h[i-1], w2=h[i]+2*h[i-1]; m.push((w1+w2)/(w1/d[i-1]+w2/d[i])); }
+  }
+  m.push(d[n-2]);
+  let i=0; while(x>xs[i+1]) i++;
+  const t=(x-xs[i])/h[i], t2=t*t, t3=t2*t;
+  return (2*t3-3*t2+1)*ys[i]+(t3-2*t2+t)*h[i]*m[i]+(-2*t3+3*t2)*ys[i+1]+(t3-t2)*h[i]*m[i+1];
+}
 // Linear interpolation of a profile array at station t (0 at the nose tip); T = the preset's stations
 function presetProfile(arr, t, T) {
   const ts=[0,...T], vs=[0,...arr];
@@ -451,21 +473,26 @@ function presetProfile(arr, t, T) {
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
-  const T=p.T||PRESET_T; // a preset may set its own stations (count and placement) where its outline changes
+  // A preset may set its own stations; coarse ones are densified so the outline bends smoothly
+  let T=p.T||PRESET_T, up=p.up, lo=p.lo, hw=p.hw;
+  if(T.length<11){
+    const S=[T[0],...DENSE_T.filter(t=>t>T[0]+0.01)]; // keep the first station (nose geometry, e.g. a popper cup)
+    up=S.map(t=>pchip(T,p.up,t)); lo=S.map(t=>pchip(T,p.lo,t)); hw=S.map(t=>pchip(T,p.hw,t)); T=S;
+  }
   const X=t=>p.L/2-t*p.L, noseX=X(p.nose||0), noseY=p.noseY||0;
   sidePts=[{x:noseX,y:noseY}]; topPts=[{x:noseX,y:0}];
-  T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-p.up[i]}); topPts.push({x:X(t),y:-p.hw[i]}); });
-  for(let i=T.length-1;i>=0;i--){ sidePts.push({x:X(T[i]),y:p.lo[i]}); topPts.push({x:X(T[i]),y:p.hw[i]}); }
+  T.forEach((t,i)=>{ sidePts.push({x:X(t),y:-up[i]}); topPts.push({x:X(t),y:-hw[i]}); });
+  for(let i=T.length-1;i>=0;i--){ sidePts.push({x:X(T[i]),y:lo[i]}); topPts.push({x:X(T[i]),y:hw[i]}); }
   sidePts.push({x:noseX,y:noseY}); topPts.push({x:noseX,y:0});
 
   // Parts: eye on the head, hook eyes on the belly, line eye per lure type
-  const up=t=>presetProfile(p.up,t,T), lo=t=>presetProfile(p.lo,t,T);
-  const eyeT=p.eyeT||0.12, half=(up(eyeT)+lo(eyeT))/2;
-  eyes=[{x:X(eyeT), y:(lo(eyeT)-up(eyeT))/2-0.2*half}];
+  const upAt=t=>presetProfile(up,t,T), loAt=t=>presetProfile(lo,t,T);
+  const eyeT=p.eyeT||0.12, half=(upAt(eyeT)+loAt(eyeT))/2;
+  eyes=[{x:X(eyeT), y:(loAt(eyeT)-upAt(eyeT))/2-0.2*half}];
   // Belly hook eyes sit under the body; station 1 is a tail eye on the end face
-  hooks=p.hooks.map(t=>t>=1?{x:X(1)-2, y:(lo(1)-up(1))/2}:{x:X(t), y:lo(t)+1.5});
-  lineEyes=[p.lineEye==='back'?{x:X(0.2),y:-up(0.2)-2}
-          : p.lineEye==='chin'?{x:X(T[0]),y:lo(T[0])*0.6}
+  hooks=p.hooks.map(t=>t>=1?{x:X(1)-2, y:(loAt(1)-upAt(1))/2}:{x:X(t), y:loAt(t)+1.5});
+  lineEyes=[p.lineEye==='back'?{x:X(0.2),y:-upAt(0.2)-2}
+          : p.lineEye==='chin'?{x:X(T[0]),y:loAt(T[0])*0.6}
           : {x:noseX+2,y:noseY+(p.lip?2:0)}];
 
   setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
@@ -749,7 +776,8 @@ const r2=v=>Math.round(v*100)/100;
 // Cubic Bezier segments [p1,c1,c2,p2] of the closed smooth outline. Catmull-Rom style tangents are
 // scaled by the neighbouring chord lengths, so unevenly spaced points don't overshoot or kink; the
 // duplicated nose point is dropped so the zero-length closing segment can't form a loop.
-// sm = tension (0 = straight lines; ~0.17 = standard Catmull-Rom for even spacing).
+// sm = smoothness 0..1: 0 = straight lines, 1 = natural curve (standard Catmull-Rom). Each control arm is
+// at most sm/3 of its segment, so no setting can overshoot into loops.
 function smoothSegments(pts, sm) {
   let P=pts;
   if(P.length>2 && P[0].x===P[P.length-1].x && P[0].y===P[P.length-1].y) P=P.slice(0,-1);
@@ -757,7 +785,7 @@ function smoothSegments(pts, sm) {
   const dist=(a,b)=>Math.max(Math.hypot(b.x-a.x,b.y-a.y),1e-9);
   for(let i=0;i<n;i++){
     const p0=P[(i-1+n)%n], p1=P[i], p2=P[(i+1)%n], p3=P[(i+2)%n];
-    const d12=dist(p1,p2), k1=2*sm*d12/(dist(p0,p1)+d12), k2=2*sm*d12/(d12+dist(p2,p3));
+    const d12=dist(p1,p2), k1=sm/3*d12/(dist(p0,p1)+d12), k2=sm/3*d12/(d12+dist(p2,p3));
     segs.push([p1,{x:p1.x+(p2.x-p0.x)*k1, y:p1.y+(p2.y-p0.y)*k1},{x:p2.x-(p3.x-p1.x)*k2, y:p2.y-(p3.y-p1.y)*k2},p2]);
   }
   return segs;
