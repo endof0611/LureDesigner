@@ -185,7 +185,7 @@
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">립 (Lip)</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="saveHCheck(this);render()"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 길이</span><span class="slider-value" id="lipLenVal">30</span></div>
         <input type="range" min="5" max="80" value="30" id="lipLenSlider" oninput="document.getElementById('lipLenVal').textContent=this.value;render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 각도</span><span class="slider-value" id="lipAngVal">35°</span></div>
@@ -425,9 +425,10 @@ let presetDirty=false; // shape or lure settings changed since the preset was lo
 const CTL_FMT={density:v=>(+v).toFixed(2), weight:v=>v, weightPos:v=>v+'%', hookWeight:v=>v,
   lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
+const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
 function setCtl(id, v) {
   const s=document.getElementById(id+'Slider');
-  s.value=v; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+  s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
 }
 function ctlState() {
   const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
@@ -529,6 +530,7 @@ function updatePresetUI() {
 }
 
 function init() {
+  for(const id in CTL_FMT) ctlLast[id]=document.getElementById(id+'Slider').value;
   setupEvents();
   applyPreset(currentPreset.cat, currentPreset.key);
 }
@@ -556,10 +558,12 @@ function saveH() {
   presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
 // One undo step per continuous slider drag instead of one per input event
+// Returns true when a new step was saved
 function saveHGrouped(key) {
-  const now=Date.now();
-  if(key!==lastSaveKey||now-lastSaveT>800) saveH();
+  const now=Date.now(), fresh=key!==lastSaveKey||now-lastSaveT>800;
+  if(fresh) saveH();
   lastSaveKey=key; lastSaveT=now;
+  return fresh;
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
@@ -767,7 +771,8 @@ function applySymTo(pts, sym) {
 }
 function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
 // The checkbox has already flipped when onchange runs: record its previous state in the undo step
-function onSymToggle(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; applySym(); syncSlidersFromPoints(); render(); }
+function saveHCheck(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; }
+function onSymToggle(el) { saveHCheck(el); applySym(); syncSlidersFromPoints(); render(); }
 // Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
 function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
 
@@ -1019,7 +1024,16 @@ function setupEvents() {
   // Sliders: 'input'. Checkboxes: 'change', which bubbles here after their own onchange (and its undo step)
   const markDirty=e=>{ if(e.target.id && !NOT_LURE.has(e.target.id)){ presetDirty=true; render(true); } };
   const sb=document.getElementById('sidebar');
-  sb.addEventListener('input', e=>{ if(e.target.type!=='checkbox') markDirty(e); });
+  sb.addEventListener('input', e=>{
+    if(e.target.type==='checkbox') return;
+    // Lure settings sliders: one undo step per drag, holding the value from before the drag
+    const id=e.target.id.replace(/Slider$/,'');
+    if(id in CTL_FMT){
+      if(saveHGrouped(id)) undoStack[undoStack.length-1].c.sl[id]=ctlLast[id];
+      ctlLast[id]=e.target.value;
+    }
+    markDirty(e);
+  });
   sb.addEventListener('change', e=>{ if(e.target.type==='checkbox') markDirty(e); });
   window.addEventListener('resize', ()=>render(true));
   document.addEventListener('click', e=>{
