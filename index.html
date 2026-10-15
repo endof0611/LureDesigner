@@ -82,8 +82,8 @@
   .sidebar::-webkit-scrollbar-track{background:transparent}
   .sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-  /* Linked line between views */
-  .link-indicator{position:absolute;right:12px;top:8px;z-index:5;font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,0.05);color:var(--text-dim);pointer-events:none}
+  /* Live size readout (top right of each view) */
+  .view-dim{position:absolute;right:12px;top:8px;z-index:5;font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,0.9);border:1px solid #cbd5e1;color:#1e293b;pointer-events:none}
 
   /* Mobile sidebar toggle */
   .sidebar-toggle{display:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:20px;cursor:pointer;align-items:center;justify-content:center;z-index:20;flex-shrink:0}
@@ -107,6 +107,7 @@
     .tool-btn{width:32px;height:32px;font-size:14px}
     .status-bar{font-size:9px;padding:4px 8px}
     .view-label{font-size:9px;padding:2px 6px}
+    .view-dim{font-size:10px;padding:2px 6px}
     .panel{padding:12px}
     .control-label{font-size:11px}
     .btn{padding:5px 10px;font-size:11px}
@@ -124,6 +125,15 @@
   /* === iPad landscape - plenty of space === */
   @media(min-width:1025px) and (max-height:900px){
     .view-row{min-height:200px}
+  }
+
+  /* === PRINT: only the actual-size drawing === */
+  #printArea{display:none}
+  @media print{
+    html,body{height:auto;overflow:visible;position:static;background:#fff;display:block}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block}
+    #printArea svg{display:block}
   }
 </style>
 </head>
@@ -143,6 +153,7 @@
     </div>
     <button class="btn" onclick="resetShape()">↺ <span class="btn-label">초기화</span></button>
     <button class="btn" onclick="undoAction()">⌫ <span class="btn-label">실행취소</span></button>
+    <button class="btn" onclick="printLure()">🖨 <span class="btn-label">인쇄</span></button>
     <button class="btn btn-accent" onclick="exportSVG()">⬇ <span class="btn-label">SVG</span></button>
   </div>
 </div>
@@ -171,7 +182,7 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">16</span></div>
         <input type="range" min="8" max="32" value="16" id="topPtsSlider" onchange="changePts('top',this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">1.00</span></div>
-        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);render()"></div>
+        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);syncSlidersFromPoints();render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
         <input type="range" min="40" max="250" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
       <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle"><span class="toggle-slider"></span></label></div>
@@ -273,12 +284,12 @@
     <div class="views">
       <div class="view-row" id="sideRow">
         <span class="view-label side">SIDE VIEW 측면</span>
-        <span class="link-indicator">X축 연동</span>
+        <span class="view-dim" id="sideDim"></span>
         <div class="view-canvas" id="sideCont"><svg id="sideSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
       <div class="view-row" id="topRow">
         <span class="view-label top">TOP VIEW 상면</span>
-        <span class="link-indicator">X축 연동</span>
+        <span class="view-dim" id="topDim"></span>
         <div class="view-canvas" id="topCont"><svg id="topSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
     </div>
@@ -315,6 +326,8 @@
   </div>
 </div>
 
+<div id="printArea"></div>
+<style id="printPage"></style>
 <script>
 // === DATA ===
 // Side view: points as {x, y} where x=length axis, y=height
@@ -512,6 +525,10 @@ function applyPreset(cat, key) {
           : p.lineEye==='chin'?{x:X(T[0]),y:loAt(T[0])*0.6}
           : {x:noseX+2,y:noseY+(p.lip?2:0)}];
 
+  // Stretch along the length so the drawn outline (not just the stations) is exactly L long
+  const d=drawnRange('side').x, k=p.L/(d.mx-d.mn);
+  mapX('side',x=>noseX+(x-noseX)*k); mapX('top',x=>noseX+(x-noseX)*k);
+
   setCtl('eyeSize',Math.max(2,Math.min(10,Math.round(half*0.7)/2)));
   const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
   setCtl('hookSize',hookR);
@@ -562,6 +579,9 @@ function toggleSidebar() {
 function xRange(pts) { let mn=Infinity,mx=-Infinity; for(const p of pts){if(p.x<mn)mn=p.x;if(p.x>mx)mx=p.x;} return {mn,mx}; }
 function yRange(pts) { let mn=Infinity,mx=-Infinity; for(const p of pts){if(p.y<mn)mn=p.y;if(p.y>mx)mx=p.y;} return {mn,mx}; }
 function viewPts(view) { return view==='side'?sidePts:topPts; }
+// Extent of the drawn (smoothed) outline: the curve rounds past the end points (e.g. a flat tail face by
+// 1-2 mm), so sizes, scaling and printing use this rather than the control points
+function drawnRange(view) { const f=flattenSmooth(viewPts(view),SM,16); return {x:xRange(f), y:yRange(f)}; }
 function symOn(view) { return document.getElementById(view==='side'?'symSide':'symTop').checked; }
 // Apply f to every X of a view. Parts live in side-view coords, so they move with the side body.
 function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.x=f(p.x))); }
@@ -655,14 +675,14 @@ function scaleLengthAll(v) {
   v=parseInt(v); document.getElementById('lenVal').textContent=v;
   const prop=document.getElementById('propToggle').checked;
   if(lastSaveKey!=='len'||Date.now()-lastSaveT>800||!lenBase){
-    const r=xRange(sidePts), val=id=>parseFloat(document.getElementById(id+'Slider').value);
+    const r=drawnRange('side').x, val=id=>parseFloat(document.getElementById(id+'Slider').value);
     lenBase={L:r.mx-r.mn, weight:val('weight'), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   saveHGrouped('len');
+  const d=drawnRange('side').x, cur=d.mx-d.mn; if(cur<1) return;
+  const sc=v/cur; // same factor for both views, so their lengths stay linked
   ['side','top'].forEach(view=>{
-    const {mn,mx}=xRange(viewPts(view));
-    const cur=mx-mn; if(cur<1)return;
-    const sc=v/cur;
+    const {mx}=xRange(viewPts(view));
     // Anchor at nose (max X); proportional mode scales height/width (and side-view parts) too
     mapX(view,x=>mx+(x-mx)*sc);
     if(prop) (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.y*=sc));
@@ -686,27 +706,28 @@ function fitIfClipped() {
 
 function scaleSideHeight(v) {
   v=parseInt(v); document.getElementById('sideHVal').textContent=v;
-  const {mn,mx}=yRange(sidePts);
-  const cur=mx-mn; if(cur<1)return;
-  const sc=v/cur; saveHGrouped('sideH');
+  const d=drawnRange('side'), cur=d.y.mx-d.y.mn; if(cur<1)return;
+  const sc=v/cur, L0=d.x.mx-d.x.mn; saveHGrouped('sideH');
   [sidePts,eyes,hooks,lineEyes].forEach(a=>a.forEach(p=>p.y*=sc));
+  // The curve's rounding past the tail depends on the point spacing, so keep the drawn length unchanged
+  const x=drawnRange('side').x, k=L0/(x.mx-x.mn), nose=xRange(sidePts).mx;
+  if(Math.abs(k-1)>1e-6){ mapX('side',v=>nose+(v-nose)*k); mapX('top',v=>nose+(v-nose)*k); }
   updateSizeInfo(); render();
 }
 
 function scaleTopWidth(v) {
   v=parseInt(v); document.getElementById('topWVal').textContent=v;
-  const {mn,mx}=yRange(topPts);
+  const {mn,mx}=drawnRange('top').y;
   const cur=mx-mn; if(cur<1)return;
   const sc=v/cur; saveHGrouped('topW');
   topPts.forEach(p=>p.y*=sc);
   updateSizeInfo(); render();
 }
 
+// Length × height × width (mm) of the drawn outline
+function lureSize() { const s=drawnRange('side'), t=drawnRange('top'); return [s.x.mx-s.x.mn, s.y.mx-s.y.mn, t.y.mx-t.y.mn]; }
 // From the outline itself: the sliders clamp to their ranges (e.g. length 40-250 mm)
-function updateSizeInfo() {
-  const x=xRange(sidePts), y=yRange(sidePts), w=yRange(topPts);
-  document.getElementById('sizeInfo').textContent=Math.round(x.mx-x.mn)+' × '+Math.round(y.mx-y.mn)+' × '+Math.round(w.mx-w.mn)+' mm';
-}
+function updateSizeInfo() { document.getElementById('sizeInfo').textContent=lureSize().map(Math.round).join(' × ')+' mm'; }
 
 // Force both views to have identical X range (length):
 // scale the shorter one to match (anchored at its nose), then align the noses
@@ -734,12 +755,10 @@ function syncToTop() { saveH(); if(!matchXRange('side','top')){undoStack.pop();r
 
 function syncSlidersFromPoints() {
   forceSyncLength();
-  const sx=xRange(sidePts), sy=yRange(sidePts), ty=yRange(topPts);
+  const [L,H,W]=lureSize();
   const set=(id,v)=>{v=Math.round(v);document.getElementById(id+'Slider').value=v;document.getElementById(id+'Val').textContent=v;};
-  set('len',sx.mx-sx.mn);
-  set('sideH',sy.mx-sy.mn);
-  set('topW',ty.mx-ty.mn);
-  updateSizeInfo();
+  set('len',L); set('sideH',H); set('topW',W);
+  document.getElementById('sizeInfo').textContent=[L,H,W].map(Math.round).join(' × ')+' mm';
 }
 
 // === PARTS MANAGEMENT ===
@@ -878,6 +897,10 @@ function doRender() {
   if(physPending && dragView===null){ physPending=false; inRender=true; calcPhysics(); inRender=false; }
   renderView('side');
   renderView('top');
+  // Live size of the drawn outline in each view
+  const [L,H,W]=lureSize();
+  document.getElementById('sideDim').textContent='길이 '+L.toFixed(1)+' mm · 최대 높이 '+H.toFixed(1)+' mm';
+  document.getElementById('topDim').textContent='길이 '+L.toFixed(1)+' mm · 최대 폭 '+W.toFixed(1)+' mm';
   const ss=symOn('side'), st=symOn('top');
   document.getElementById('statusInfo').textContent=presetName()+' | 측면: '+sidePts.length+'pt'+(ss?' (대칭)':'')+' | 상면: '+topPts.length+'pt'+(st?' (대칭)':'');
 }
@@ -1249,8 +1272,9 @@ function onUp(){
 
 // === EXPORT ===
 // One valid SVG document: side view (body, lip, parts) on top, top view below. Units are the editor's mm.
-function exportSVG() {
-  const M=20, GAP=20;
+// Side view (body, weight, lip, parts) above the top view, in mm. M = margin, sw = outline width (mm)
+function buildLureSVG(M, sw) {
+  const GAP=20;
   const bbox=pts=>{ const x=xRange(pts), y=yRange(pts); return {x1:x.mn,y1:y.mn,w:x.mx-x.mn,h:y.mx-y.mn}; };
   const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
   const hookR=parseFloat(document.getElementById('hookSizeSlider').value);
@@ -1273,16 +1297,38 @@ function exportSVG() {
     wSide=el(wp.z,sz.ry); wTop=el(0,sz.ry);
   }
   const sb=bbox(sideExtent), tb=bbox(topPts);
-  const w=r2(Math.max(sb.w,tb.w)+M*2), h=r2(sb.h+tb.h+GAP+M*2);
-  const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
+  // One X origin for both views so nose and tail line up vertically, as in the editor
+  const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+M*2), h=r2(sb.h+tb.h+GAP+M*2);
+  const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+sw+'"/>';
   const parts=partsMarkup(0,0,1,false);
-  const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">\n'+
-    '  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-sb.x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
+  const inner='  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
     (parts?'\n    '+parts:'')+'\n  </g>\n'+
-    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-tb.x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>\n</svg>';
+    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>';
+  return {w, h, inner, bottom:r2(M+sb.h+GAP+tb.h)};
+}
+function exportSVG() {
+  const {w,h,inner}=buildLureSVG(20,SW);
+  const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">\n'+inner+'\n</svg>';
   document.getElementById('exportContent').value=out;
   document.getElementById('exportOverlay').style.display='flex';
 }
+
+// Actual-size print: the SVG is sized in mm (1 unit = 1 mm), with a 50 mm scale bar to check the printer scale
+function printLure() {
+  const M=8, BAR=50, {w,h,inner,bottom}=buildLureSVG(M,0.3);
+  const H=r2(h+14), by=r2(bottom+8);
+  const label=presetName()+' · '+lureSize().map(Math.round).join(' × ')+' mm · 실제 크기 (1:1)';
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'mm" height="'+H+'mm" viewBox="0 0 '+w+' '+H+'">\n'+inner+
+    '\n  <path d="M '+M+' '+(by-2)+' V '+(by+2)+' M '+M+' '+by+' H '+(M+BAR)+' M '+(M+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
+    '\n  <text x="'+(M+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
+    '\n  <text x="'+M+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
+  // Hairline strokes on paper (the on-screen widths would be up to 1.5 mm thick)
+  document.getElementById('printArea').innerHTML=svg.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"');
+  // A4 with 10 mm margins: portrait fits 190 mm, landscape 277 mm (the longest lure, 250 mm, fits landscape)
+  document.getElementById('printPage').textContent='@page{size:A4 '+(w>190?'landscape':'portrait')+';margin:10mm}';
+  window.print();
+}
+window.addEventListener('afterprint', ()=>{ const a=document.getElementById('printArea'); if(a) a.innerHTML=''; });
 
 function copyExport(btn) {
   const ta=document.getElementById('exportContent');
@@ -1429,10 +1475,7 @@ function castRange(massG, CdA_cm2) {
 let lastPhys=null;
 function calcPhysics() {
   // Get dimensions in mm
-  const sx=xRange(sidePts), sy=yRange(sidePts), ty=yRange(topPts);
-  const L=sx.mx-sx.mn; // length mm
-  const H=sy.mx-sy.mn; // height mm
-  const W=ty.mx-ty.mn; // width mm
+  const sx=drawnRange('side').x, [L,H,W]=lureSize(); // drawn length, height, width (mm)
   if(L<1||H<1||W<1) return;
   const density=parseFloat(document.getElementById('densitySlider').value);
   const addWeight=parseFloat(document.getElementById('weightSlider').value);
