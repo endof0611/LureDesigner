@@ -745,15 +745,19 @@ function syncSlidersFromPoints() {
 // === PARTS MANAGEMENT ===
 function addPart(type) {
   saveH();
-  const {mn:mnx,mx:mxx}=xRange(sidePts), mxy=yRange(sidePts).mx;
+  // Positions relative to the body wherever it sits (the outline isn't always centred on x = 0)
+  const {mn:mnx,mx:mxx}=xRange(sidePts), side=flattenSmooth(sidePts,SM,12);
+  const at=x=>spanAt(side,x)||{mn:0,mx:0};
   if(type==='eye') {
-    // Place near front of body
-    eyes.push({x:mxx*0.5, y:-3});
+    // On the head, 10% of the length back from the nose, slightly above the middle
+    const x=mxx-(mxx-mnx)*0.1, s=at(x);
+    eyes.push({x, y:(s.mn+s.mx)/2-(s.mx-s.mn)*0.1});
   } else if(type==='hook') {
-    // Place at belly center
-    hooks.push({x:(mnx+mxx)*0.5*0.3, y:mxy+2});
+    // Under the belly at mid-length
+    const x=(mnx+mxx)/2;
+    hooks.push({x, y:at(x).mx+1.5});
   } else if(type==='lineEye') {
-    lineEyes.push({x:mxx+5, y:0});
+    lineEyes.push({x:mxx+2, y:sidePts[0].y});
   }
   updatePartCounts();
   render();
