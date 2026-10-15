@@ -679,14 +679,19 @@ function scaleLengthAll(v) {
     lenBase={L:r.mx-r.mn, weight:val('weight'), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   saveHGrouped('len');
-  const d=drawnRange('side').x, cur=d.mx-d.mn; if(cur<1) return;
-  const sc=v/cur; // same factor for both views, so their lengths stay linked
-  ['side','top'].forEach(view=>{
-    const {mx}=xRange(viewPts(view));
-    // Anchor at nose (max X); proportional mode scales height/width (and side-view parts) too
-    mapX(view,x=>mx+(x-mx)*sc);
-    if(prop) (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.y*=sc));
-  });
+  // Same factor for both views, so their lengths stay linked; anchored at the nose (max X).
+  // Proportional mode scales height/width (and side-view parts) too: a similarity, exact in one step.
+  // A length-only stretch changes how far the curve rounds past the tail, so it is refined until the
+  // drawn length matches.
+  for(let it=0; it<(prop?1:4); it++){
+    const d=drawnRange('side').x, cur=d.mx-d.mn; if(cur<1) return;
+    const sc=v/cur; if(Math.abs(sc-1)<1e-5) break;
+    ['side','top'].forEach(view=>{
+      const {mx}=xRange(viewPts(view));
+      mapX(view,x=>mx+(x-mx)*sc);
+      if(prop) (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.y*=sc));
+    });
+  }
   if(prop){
     // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
@@ -1342,8 +1347,11 @@ function printLure() {
     '\n  <text x="'+M+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
   // Hairline strokes on paper (the on-screen widths would be up to 1.5 mm thick)
   document.getElementById('printArea').innerHTML=svg.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"');
-  // A4 with 10 mm margins: portrait fits 190 mm, landscape 277 mm (the longest lure, 250 mm, fits landscape)
-  document.getElementById('printPage').textContent='@page{size:A4 '+(w>190?'landscape':'portrait')+';margin:10mm}';
+  // Smallest page that holds the drawing at 1:1 with 10 mm margins (A4 portrait / landscape, then A3)
+  const fits=(pw,ph)=>w<=pw-20&&H<=ph-20;
+  const page=fits(210,297)?'A4 portrait':fits(297,210)?'A4 landscape':fits(297,420)?'A3 portrait':'A3 landscape';
+  document.getElementById('printPage').textContent='@page{size:'+page+';margin:10mm}';
+  if(!fits(297,210) && !fits(210,297)) alert('실제 크기가 A4보다 커서 '+page.replace(' portrait',' 세로').replace(' landscape',' 가로')+' 용지로 설정됩니다.'+(fits(420,297)||fits(297,420)?'':' A3에도 다 들어가지 않아 일부가 잘릴 수 있습니다.'));
   window.print();
 }
 window.addEventListener('afterprint', ()=>{ const a=document.getElementById('printArea'); if(a) a.innerHTML=''; });
