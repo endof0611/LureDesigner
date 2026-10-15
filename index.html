@@ -951,7 +951,9 @@ function renderView(which) {
 
   // Body
   const dp=pts.map(p=>({x:cx+p.x*zoom, y:cy+p.y*zoom}));
-  html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+SW+'"/>';
+  // Half-transparent fill while the grid is on, so the mm grid can be read inside the body too
+  const gridOn=document.getElementById('gridToggle').checked;
+  html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'"'+(gridOn?' fill-opacity="0.45"':'')+' stroke="'+SC+'" stroke-width="'+SW+'"/>';
 
   // Internal weight (draggable in the side view)
   const wg=parseFloat(document.getElementById('weightSlider').value);
@@ -1304,7 +1306,8 @@ function buildLureSVG(M, sw) {
   const inner='  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
     (parts?'\n    '+parts:'')+'\n  </g>\n'+
     '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>';
-  return {w, h, inner, bottom:r2(M+sb.h+GAP+tb.h)};
+  // Drawing coordinates of the nose X, the side/top centre lines and the split between the two views
+  return {w, h, inner, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
 }
 function exportSVG() {
   const {w,h,inner}=buildLureSVG(20,SW);
@@ -1315,10 +1318,25 @@ function exportSVG() {
 
 // Actual-size print: the SVG is sized in mm (1 unit = 1 mm), with a 50 mm scale bar to check the printer scale
 function printLure() {
-  const M=8, BAR=50, {w,h,inner,bottom}=buildLureSVG(M,0.3);
-  const H=r2(h+14), by=r2(bottom+8);
+  const M=8, BAR=50, {w,h,inner,noseX,sideY,topY,split}=buildLureSVG(M,0.3);
+  const H=r2(h+16), by=r2(h+4); // scale bar and label below the drawing (and its grid)
+  // mm grid as in the editor (1 mm / 10 mm from the nose and the centre line), when the grid is on.
+  // The body is left unfilled so the grid shows through it for measuring.
+  let grid='';
+  if(document.getElementById('gridToggle').checked){
+    const pat=(id,y0)=>['m','c'].map(k=>{ const sz=k==='m'?1:10;
+      return '<pattern id="'+k+id+'" width="'+sz+'" height="'+sz+'" patternUnits="userSpaceOnUse" x="'+r2(noseX-sz/2)+'" y="'+r2(y0-sz/2)+'">'+
+        '<path d="M '+sz/2+' 0 V '+sz+' M 0 '+sz/2+' H '+sz+'" fill="none" stroke="'+(k==='m'?'#d4d4d4':'#8a8a8a')+'" stroke-width="'+(k==='m'?0.08:0.15)+'"/></pattern>'; }).join('');
+    const area=(id,y,hh)=>'<rect x="0" y="'+y+'" width="'+w+'" height="'+hh+'" fill="url(#m'+id+')"/><rect x="0" y="'+y+'" width="'+w+'" height="'+hh+'" fill="url(#c'+id+')"/>';
+    let nums='';
+    for(let i=0, x=noseX; x>=0; i++, x-=10) nums+='<text x="'+r2(x)+'" y="2.6" font-size="2.4" text-anchor="middle" font-family="sans-serif" fill="#555">'+i+'</text>';
+    grid='\n  <defs>'+pat('s',sideY)+pat('t',topY)+'</defs>\n  '+area('s',3.5,r2(split-3.5))+area('t',split,r2(h-split))+
+      '\n  <path d="M '+noseX+' 3.5 V '+h+' M 0 '+sideY+' H '+w+' M 0 '+topY+' H '+w+'" stroke="#555" stroke-width="0.2" fill="none"/>'+
+      '\n  <text x="'+r2(noseX+2)+'" y="2.6" font-size="2.4" font-family="sans-serif" fill="#555">cm</text>\n  '+nums;
+  }
   const label=presetName()+' · '+lureSize().map(Math.round).join(' × ')+' mm · 실제 크기 (1:1)';
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'mm" height="'+H+'mm" viewBox="0 0 '+w+' '+H+'">\n'+inner+
+  const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'mm" height="'+H+'mm" viewBox="0 0 '+w+' '+H+'">'+grid+'\n'+body+
     '\n  <path d="M '+M+' '+(by-2)+' V '+(by+2)+' M '+M+' '+by+' H '+(M+BAR)+' M '+(M+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
     '\n  <text x="'+(M+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
     '\n  <text x="'+M+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
