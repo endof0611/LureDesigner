@@ -185,7 +185,7 @@
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">립 (Lip)</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="saveHCheck(this);render()"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 길이</span><span class="slider-value" id="lipLenVal">30</span></div>
         <input type="range" min="5" max="80" value="30" id="lipLenSlider" oninput="document.getElementById('lipLenVal').textContent=this.value;render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 각도</span><span class="slider-value" id="lipAngVal">35°</span></div>
@@ -387,6 +387,22 @@ const PRESETS={
       up:[4.5,7.5,12.0,16.1,19.7,21.7,22.2,21.1,18.1,14.3,10.0,3.4], lo:[5.6,8.9,12.8,15.3,16.0,14.6,11.9,9.7,8.5,7.8,6.5,3.7],
       hw:[5.6,8.8,12.3,14.3,14.9,14.3,13.3,12.5,11.9,11.0,8.5,2.3],
       density:0.45, weight:21, weightPos:30, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+    // Captain Bait diving pencils (Type1-3): outlines traced from side + top photos (both sides averaged), measured from the
+    // through-wire axis drawn on the photos, at a 200 mm base and scaled proportionally (prop:true)
+    type1:{name:'Type1', desc:'캡틴베이트 슬림 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.07,
+      up:[2.1,3.2,5.5,8.3,11.4,14.4,15.8,16.1,14.8,13,10.6,8.2,6.4,3.5], lo:[3.3,5.5,8.2,10.9,13.7,15.6,16.3,14.3,11.6,9.3,8,7.1,6.5,4.4],
+      hw:[3.2,5,7.1,9.1,11.2,13,13,13,12.8,12.5,11.4,10.6,9.9,7.6],
+      density:0.4, weight:22, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+    // Type2: high forehead above the wire axis, belly that stays deep to the tail
+    type2:{name:'Type2', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.11, noseY:-2.5,
+      up:[7.5,9.4,11.5,13.7,16.4,18.9,20.4,20.4,19.1,16,11.9,7.5,4.1,0.9], lo:[2.2,4.1,6.6,9.5,12.6,15.3,15.9,15.3,13.5,12.2,11.8,11.7,11.2,8.4],
+      hw:[5.1,6.9,9.1,10.7,12.8,14.7,15.2,15.1,14.2,12.9,11.2,9.4,7.6,4.6],
+      density:0.4, weight:30, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+    // Type3: the deepest of the three, with a rounded head
+    type3:{name:'Type3', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.08,
+      up:[5,7.9,11.5,14.6,18,20.8,21.8,21.8,20.3,17.7,14.8,11.7,8.7,5.2], lo:[4.8,7.1,9.9,12.7,15.2,16.2,15.9,14.8,13.3,11.5,10,8.7,7.4,4.5],
+      hw:[4.7,6.9,9.8,12.4,14,14.9,15,14.5,13.7,12.5,11,9.6,8.2,6.2],
+      density:0.4, weight:30, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
       density:0.4, weight:25, weightPos:85, hooks:[0.4,1], lineEye:'chin'}
@@ -425,9 +441,10 @@ let presetDirty=false; // shape or lure settings changed since the preset was lo
 const CTL_FMT={density:v=>(+v).toFixed(2), weight:v=>v, weightPos:v=>v+'%', hookWeight:v=>v,
   lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
+const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
 function setCtl(id, v) {
   const s=document.getElementById(id+'Slider');
-  s.value=v; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+  s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
 }
 function ctlState() {
   const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
@@ -529,6 +546,7 @@ function updatePresetUI() {
 }
 
 function init() {
+  for(const id in CTL_FMT) ctlLast[id]=document.getElementById(id+'Slider').value;
   setupEvents();
   applyPreset(currentPreset.cat, currentPreset.key);
 }
@@ -556,10 +574,12 @@ function saveH() {
   presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
 // One undo step per continuous slider drag instead of one per input event
+// Returns true when a new step was saved
 function saveHGrouped(key) {
-  const now=Date.now();
-  if(key!==lastSaveKey||now-lastSaveT>800) saveH();
+  const now=Date.now(), fresh=key!==lastSaveKey||now-lastSaveT>800;
+  if(fresh) saveH();
   lastSaveKey=key; lastSaveT=now;
+  return fresh;
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
@@ -767,7 +787,8 @@ function applySymTo(pts, sym) {
 }
 function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
 // The checkbox has already flipped when onchange runs: record its previous state in the undo step
-function onSymToggle(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; applySym(); syncSlidersFromPoints(); render(); }
+function saveHCheck(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; }
+function onSymToggle(el) { saveHCheck(el); applySym(); syncSlidersFromPoints(); render(); }
 // Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
 function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
 
@@ -1019,7 +1040,16 @@ function setupEvents() {
   // Sliders: 'input'. Checkboxes: 'change', which bubbles here after their own onchange (and its undo step)
   const markDirty=e=>{ if(e.target.id && !NOT_LURE.has(e.target.id)){ presetDirty=true; render(true); } };
   const sb=document.getElementById('sidebar');
-  sb.addEventListener('input', e=>{ if(e.target.type!=='checkbox') markDirty(e); });
+  sb.addEventListener('input', e=>{
+    if(e.target.type==='checkbox') return;
+    // Lure settings sliders: one undo step per drag, holding the value from before the drag
+    const id=e.target.id.replace(/Slider$/,'');
+    if(id in CTL_FMT){
+      if(saveHGrouped(id)) undoStack[undoStack.length-1].c.sl[id]=ctlLast[id];
+      ctlLast[id]=e.target.value;
+    }
+    markDirty(e);
+  });
   sb.addEventListener('change', e=>{ if(e.target.type==='checkbox') markDirty(e); });
   window.addEventListener('resize', ()=>render(true));
   document.addEventListener('click', e=>{
