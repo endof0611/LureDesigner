@@ -260,8 +260,8 @@
         <div class="control-row"><span>예상 체적</span><span id="phVolume" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>예상 무게</span><span id="phWeight" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>잠행 깊이</span><span id="phDepth" style="color:var(--accent)">-</span></div>
-        <div class="control-row"><span>워블 타입</span><span id="phWobble" style="color:var(--accent)">-</span></div>
-        <div class="control-row"><span>워블 폭</span><span id="phWobbleW" style="color:var(--accent)">-</span></div>
+        <div class="control-row"><span>루어 타입</span><span id="phWobble" style="color:var(--accent)">-</span></div>
+        <div class="control-row"><span>액션 특성</span><span id="phWobbleW" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>롤링 경향</span><span id="phRoll" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>캐스팅 비거리</span><span id="phCast" style="color:var(--accent)">-</span></div>
         <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--text-dim)" id="phComment">형태를 수정하면 자동으로 예측됩니다</div>
@@ -311,8 +311,9 @@
       <button class="btn anim-view-btn active" onclick="setAnimView('side',this)">측면</button>
       <button class="btn anim-view-btn" onclick="setAnimView('top',this)">상면</button>
     </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text-dim)">운용법:</span><span id="animTechs" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
     <canvas id="animCanvas" width="680" height="360" style="width:100%;background:#0c1829;border-radius:8px;border:1px solid var(--border)"></canvas>
-    <div style="font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center" id="animInfo">리트리브 시 예상 움직임 패턴</div>
+    <div style="font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center" id="animInfo"></div>
   </div>
 </div>
 
@@ -1498,6 +1499,84 @@ function castRange(massG, CdA_cm2) {
   return x;
 }
 
+// === ACTION MODEL ===
+// Lure type from the shape and the physics, the techniques that suit it, and the parameters the
+// preview animates. These are tendencies from shape, buoyancy and balance, not a fluid simulation.
+const TECH_NAMES={retrieve:'리트리브', jerk:'저크 & 포즈', twitch:'트위칭', walk:'도그워크', pop:'팝핑', liftfall:'리프트 & 폴', stopgo:'스톱 & 고'};
+const LURE_TYPES={
+  divingPencil:{name:'다이빙 펜슬', techs:['jerk','retrieve']},
+  topPencil:{name:'톱워터 펜슬', techs:['walk','retrieve']},
+  popper:{name:'포퍼', techs:['pop','walk']},
+  liplessMinnow:{name:'립리스 미노우', techs:['retrieve','twitch']},
+  sinkingPencil:{name:'싱킹 펜슬', techs:['retrieve','twitch','liftfall']},
+  vibe:{name:'바이브레이션', techs:['retrieve','liftfall']},
+  crank:{name:'크랭크베이트', techs:['retrieve','stopgo']},
+  minnow:{name:'립 미노우', techs:['retrieve','twitch','stopgo']},
+  jerkbait:{name:'저크베이트', techs:['jerk','twitch','retrieve']}
+};
+function classifyLure(lipOn, buoyClass, pitch, L, H) {
+  if(lipOn) return buoyClass==='SP'?'jerkbait':H/L>0.3?'crank':'minnow';
+  const nose=sidePts[0], front=xRange(sidePts).mx;
+  if(lineEyes.length && lineEyes[0].x<nose.x-0.08*L) return 'vibe';   // line eye on the back
+  if(front-nose.x>0.01*L) return 'popper';                             // face recessed behind its rim: a cup
+  if(buoyClass==='S') return 'sinkingPencil';
+  if(buoyClass==='SP') return 'liplessMinnow';
+  const p=pitch===null?0:pitch;
+  if(p<=-60 && L<150) return 'topPencil';                             // small, floats nearly upright
+  // Lipless floaters: a rear centre of gravity tips the tail down, and a pull on the nose eye then drives
+  // the head under: a diving pencil. Big lipless floaters are pencils even when level (flat pencils).
+  return p<-12||L>=150?'divingPencil':'liplessMinnow';
+}
+function actionParams(o) {
+  const {type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed}=o;
+  const rodV=SPEED_MS[speed], rest=pitch===null?0:pitch, hl=H/L, wh=W/H;
+  const a={type, rodV, restPitch:rest, swimPitch:rest*0.2, divePitch:18, wobHz:wobbleHz, yawAmp:4, rollAmp:10,
+    dartYaw:25, diveRate:1.0, maxDepth:3, bottom:2, surface:false, startDepth:0,
+    freeRate:buoyClass==='S'?sinkRate:buoyClass==='F'?-riseRate:0, sinkRate, riseRate};
+  const sinking=Math.max(0.3,Math.min(2.5,sinkRate*2/rodV)); // a sinking lure settles deeper at slow speed
+  if(type==='crank'){ Object.assign(a,{runDepth:depth, yawAmp:6+30*hl, rollAmp:8+6*wh, swimPitch:rest*0.2+10}); a.twitchDepth=depth; }
+  else if(type==='minnow'||type==='jerkbait'){
+    Object.assign(a,{runDepth:depth, yawAmp:4+25*hl, rollAmp:12, swimPitch:rest*0.2+8, twitchDepth:depth*0.8,
+      diveDepth:Math.max(0.3,depth)*1.1, dartYaw:type==='jerkbait'?35:20});
+  }
+  else if(type==='liplessMinnow') Object.assign(a,{runDepth:buoyClass==='SP'?0.5:Math.min(0.6,0.3*Math.sqrt(L/125)), yawAmp:5, rollAmp:25, twitchDepth:0.35, dartYaw:20});
+  else if(type==='vibe') Object.assign(a,{runDepth:sinking, wobHz:wobbleHz*1.8, yawAmp:4, rollAmp:4, startDepth:1.5});
+  else if(type==='sinkingPencil') Object.assign(a,{runDepth:sinking, wobHz:1.2, yawAmp:12, rollAmp:15, twitchDepth:sinking, dartYaw:25, startDepth:1});
+  else if(type==='topPencil') Object.assign(a,{runDepth:0, surface:true, wobHz:2, yawAmp:3, rollAmp:5});
+  else if(type==='popper') Object.assign(a,{runDepth:0, surface:true, yawAmp:2, rollAmp:3});
+  else { // divingPencil
+    // Dive on the jerk: deeper the more the tail hangs (rear CG), the longer the lure, the less spare buoyancy
+    // and the harder the jerk (speed setting)
+    const tilt=Math.max(0,Math.min(70,-rest))/70;
+    a.diveDepth=Math.max(0.15,Math.min(1.5,(0.2+0.8*tilt)*Math.sqrt(L/200)*(0.7+0.3*buoyancyRatio)*(0.7+0.3*rodV/0.8)));
+    Object.assign(a,{runDepth:0.15, swimPitch:rest*0.25, wobHz:1.5, yawAmp:3, rollAmp:wh>0.8?35:25, dartYaw:wh>0.8?20:30, diveRate:1.2, twitchDepth:0.3});
+  }
+  if(a.diveDepth===undefined) a.diveDepth=a.twitchDepth!==undefined?a.twitchDepth:a.runDepth;
+  if(a.twitchDepth===undefined) a.twitchDepth=a.runDepth;
+  return a;
+}
+// One-line description of what the lure does with a technique
+function actionText(a, tech) {
+  const m=v=>v.toFixed(1)+' m', cms=v=>(v*100).toFixed(0)+' cm/s';
+  const stop=a.freeRate<0?'떠오름 (약 '+cms(a.riseRate)+')':a.freeRate>0?'가라앉음 (약 '+cms(a.sinkRate)+')':'그 수심에 멈춤';
+  const T={
+    divingPencil:{jerk:'저크하면 머리부터 약 '+m(a.diveDepth)+' 잠수하며 롤링·좌우 다팅, 포즈에서 꼬리 숙인 자세로 '+stop+
+        (a.restPitch>-12?'. 무게중심이 앞쪽이라 잠수가 얕고 수면 아래를 미끄러지는 액션 위주':''),
+      retrieve:'천천히 감으면 수면 바로 아래에서 롤링하며 S자로 헤엄'},
+    topPencil:{walk:'로드를 짧고 리듬 있게 치면 머리를 좌우로 번갈아 트는 도그워크', retrieve:'그냥 감으면 수면을 미끄러지며 직진 (액션 약함)'},
+    popper:{pop:'짧게 당기면 컵이 물을 받아 팝·스플래시, 멈추면 꼬리 숙인 자세로 정지', walk:'짧게 연속으로 치면 좌우로 머리를 트는 워킹'},
+    liplessMinnow:{retrieve:'표층 약 '+m(a.runDepth)+'에서 롤링 위주의 타이트 액션', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop},
+    sinkingPencil:{retrieve:'S자 슬라이드 + 롤링, 느리게 감을수록 깊게 (약 '+m(a.runDepth)+')', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop,
+      liftfall:'들어 올리면 상승, 멈추면 롤링하며 '+stop},
+    vibe:{retrieve:'잘게 떠는 고속 진동 (약 '+a.wobHz.toFixed(0)+' Hz), 수심 약 '+m(a.runDepth), liftfall:'들어 올리며 진동하다 멈추면 '+stop+' (바닥 공략)'},
+    crank:{retrieve:'감으면 립이 물을 받아 워블하며 약 '+m(a.runDepth)+'까지 잠행', stopgo:'감으면 잠행, 멈추면 '+stop},
+    minnow:{retrieve:'감으면 워블하며 약 '+m(a.runDepth)+'까지 잠행', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop, stopgo:'감으면 잠행, 멈추면 '+stop},
+    jerkbait:{jerk:'저크하면 좌우로 크게 다팅하며 약 '+m(a.diveDepth)+'까지, 포즈에서 '+stop, twitch:'짧게 치면 작은 다팅, 멈추면 '+stop,
+      retrieve:'감으면 워블하며 약 '+m(a.runDepth)+'까지 잠행'}
+  };
+  return T[a.type][tech];
+}
+
 let lastPhys=null;
 function calcPhysics() {
   // Get dimensions in mm
@@ -1569,15 +1648,21 @@ function calcPhysics() {
     if(pitch!==null) depth*=1+Math.max(-20,Math.min(20,pitch))*0.01; // nose-down helps the lip bite
     depth=Math.max(0,Math.min(depth,8));
   }
-  // Sink rate: net weight balanced by broadside drag (Cd≈1 on the top-view area)
-  const sinkRate=buoyClass==='S'?Math.sqrt(2*(M-V*WATER)/1000*9.81/(1000*polyArea(top)*1e-6)):0;
-  let depthText;
-  if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
-  else depthText=buoyClass==='S'?'침강 '+(sinkRate*100).toFixed(0)+' cm/s':buoyClass==='SP'?'정지 수심 유지':'표층 (립 없음)';
+  // Sink / rise rate: net weight or buoyancy balanced by broadside drag (Cd≈1 on the top-view area)
+  const freeV=Math.sqrt(2*Math.abs(M-V*WATER)/1000*9.81/(1000*polyArea(top)*1e-6));
+  const sinkRate=buoyClass==='S'?freeV:0, riseRate=buoyClass==='F'?freeV:0;
 
   // Wobble amplitude from H/L; frequency ~ speed / body height (Strouhal-like, St≈0.2)
   const hlRatio=H/L;
   const wobbleHz=0.2*SPEED_MS[speed]/(H/1000);
+  const type=classifyLure(lip.on,buoyClass,pitch,L,H);
+  const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed});
+  const lt=LURE_TYPES[type];
+  let depthText;
+  if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
+  else if(type==='divingPencil') depthText='저크 시 약 '+act.diveDepth.toFixed(1)+' m 잠수 (정지 시 부상)';
+  else if(type==='topPencil'||type==='popper') depthText='수면';
+  else depthText=buoyClass==='S'?'침강 '+(sinkRate*100).toFixed(0)+' cm/s':buoyClass==='SP'?'정지 수심 유지':'표층 약 '+act.runDepth.toFixed(1)+' m';
   let wobbleType,wobbleWidth;
   if(hlRatio>0.45){wobbleType='와이드 워블';wobbleWidth='넓음';}
   else if(hlRatio>0.3){wobbleType='미디엄 워블';wobbleWidth='중간';}
@@ -1623,21 +1708,26 @@ function calcPhysics() {
   set('phVolume',vol_cm3.toFixed(1)+' cm³');
   set('phWeight',totalWeight.toFixed(1)+' g');
   set('phDepth',depthText);
-  set('phWobble',wobbleType);
-  set('phWobbleW',wobbleWidth+' · 약 '+wobbleHz.toFixed(1)+' Hz');
+  set('phWobble',lt.name+' · '+lt.techs.map(t=>TECH_NAMES[t]).join(' / '));
+  // Lip and lipless wobblers swim by themselves; pencils and topwater lures act when worked
+  set('phWobbleW',{divingPencil:'롤링·다팅 (워블 거의 없음)', topPencil:'도그워크 (수면)', popper:'팝·스플래시 (수면)',
+    sinkingPencil:'S자 슬라이드 + 롤링', vibe:'고속 진동 · 약 '+act.wobHz.toFixed(0)+' Hz'}[type]||wobbleType+' · '+wobbleWidth+' · 약 '+wobbleHz.toFixed(1)+' Hz');
   set('phRoll',rollType);
   set('phCast',castDist+' (약 '+castM.toFixed(0)+' m)');
   set('phComment',comment);
 
   // Store for animation
-  lastPhys={H,hlRatio,whRatio,depth,wobbleType,wobbleHz,buoyancyState,pitch,speed,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb};
+  lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act};
   // Slider-driven recalculation outside a render: refresh the CG/CB markers
   if(!inRender && document.getElementById('cgToggle').checked) render(true);
 }
 
 // === ANIMATION ENGINE ===
-const ANIM_W=680, ANIM_H=360; // logical canvas size
-let animRAF=null, animTime=0, animLastTs=null, animView='side', animRunning=false, animCtx=null, animInfoText='';
+// Kinematic sketch of the chosen technique (not a fluid simulation). The camera follows the lure, so
+// the water particles, the trail and the splashes move past it. Side view: depth, scaled to the depth the
+// technique reaches; top view: sideways movement (1 m = LAT_PX). The lure travels nose first, toward the rod.
+const ANIM_W=680, ANIM_H=360, WATER_Y=60, PX_M=160, LAT_PX=300;
+let animRAF=null, animLastTs=null, animView='side', animRunning=false, animCtx=null, animTech=null, sim=null;
 
 function toggleAnimation(){
   document.getElementById('animOverlay').style.display='flex';
@@ -1648,7 +1738,10 @@ function toggleAnimation(){
   animCtx=canvas.getContext('2d');
   animCtx.setTransform(dpr,0,0,dpr,0,0);
   calcPhysics();
-  animTime=0;
+  const techs=LURE_TYPES[lastPhys.act.type].techs;
+  if(!techs.includes(animTech)) animTech=techs[0];
+  updateAnimTechs();
+  animReset();
   animPlay();
 }
 function closeAnimation(){
@@ -1661,6 +1754,14 @@ function setAnimView(v,btn){
   btn.classList.add('active');
   if(!animRunning) drawAnimation();
 }
+// Technique buttons for the detected lure type, and the description of the chosen one
+function updateAnimTechs(){
+  const a=lastPhys.act;
+  document.getElementById('animTechs').innerHTML=LURE_TYPES[a.type].techs.map(t=>
+    '<button class="btn'+(t===animTech?' active':'')+'" onclick="setAnimTech(\''+t+'\')">'+TECH_NAMES[t]+'</button>').join('');
+  document.getElementById('animInfo').textContent=LURE_TYPES[a.type].name+' · '+TECH_NAMES[animTech]+' — '+actionText(a,animTech);
+}
+function setAnimTech(t){ animTech=t; updateAnimTechs(); animReset(); if(!animRunning) drawAnimation(); }
 function animTogglePlay(){ if(animRunning) animPause(); else animPlay(); }
 function animPlay(){
   if(animRunning)return;
@@ -1677,122 +1778,152 @@ function animPause(){
 }
 function animStop(){
   animPause();
-  animTime=0;
+  animReset();
   if(animCtx) drawAnimation();
+}
+function animReset(){
+  const a=lastPhys.act;
+  const reach={jerk:a.diveDepth, twitch:a.twitchDepth, liftfall:a.bottom}[animTech]??(a.surface?0:a.runDepth);
+  const shown=Math.min(3,Math.max(0.8,Math.max(reach,a.startDepth)*1.3+0.2)); // metres shown below the surface
+  sim={t:0, x:0, lat:0, d:a.startDepth, v:0, head:0, yaw:0, pitch:a.restPitch, roll:0, hist:[], splash:[], phase:'go', phaseT:0, n:0,
+    depthPx:(ANIM_H-WATER_Y-24)/shown, shown};
 }
 
 function animLoop(ts){
   if(!animRunning)return;
-  // Advance by real elapsed time so speed doesn't depend on display refresh rate
-  if(animLastTs!==null) animTime+=Math.min(100,ts-animLastTs);
+  // Advance by real elapsed time (in small steps) so speed doesn't depend on the display refresh rate
+  if(animLastTs!==null){ let dt=Math.min(0.1,(ts-animLastTs)/1000); while(dt>0){ const h=Math.min(dt,1/120); animStep(h); dt-=h; } }
   animLastTs=ts;
   drawAnimation();
   animRAF=requestAnimationFrame(animLoop);
 }
 
+// One time step (s) of the technique: target speed, depth and heading, then simple first-order responses
+function animStep(dt){
+  const a=lastPhys.act, s=sim, tech=animTech;
+  s.t+=dt; s.phaseT+=dt;
+  const osc=(hz,amp,ph)=>Math.sin(2*Math.PI*Math.min(hz,7)*s.t+(ph||0))*amp; // capped so it stays visible
+  let vT=a.rodV, dT=a.runDepth, dRate=0.6, headT=0, yawO=0, pitchT=a.swimPitch, rollT=0, slack=false;
+  const swim=()=>{ yawO=osc(a.wobHz,a.yawAmp); rollT=osc(a.wobHz,a.rollAmp,Math.PI/2); };
+  if(tech==='retrieve') swim();
+  else if(tech==='jerk'||tech==='twitch'){
+    const jerk=tech==='jerk', J=jerk?0.45:0.18, P=jerk?1.4:0.5, side=s.n%2?1:-1;
+    if(s.phase==='go'){
+      vT=a.rodV*(jerk?3:2); dT=jerk?a.diveDepth:a.twitchDepth; dRate=a.diveRate;
+      headT=side*a.dartYaw*(jerk?1:0.6); rollT=osc(3,a.rollAmp*1.4);
+      pitchT=dT>s.d+0.03?a.divePitch:a.swimPitch;
+      if(s.phaseT>=J){ s.phase='pause'; s.phaseT=0; }
+    } else {
+      // Line slack: buoyancy takes over. A floating lure waits until it is back at the surface.
+      vT=0; slack=true; headT=s.head; pitchT=a.restPitch;
+      const up=a.freeRate<0 && s.d>0.01;
+      if(s.phaseT>=(up?3:P) || (a.freeRate<0 && !up && s.phaseT>=Math.min(P,0.4))){ s.phase='go'; s.phaseT=0; s.n++; }
+    }
+  }
+  else if(tech==='walk'){
+    const T=0.42, n=Math.floor(s.t/T), tc=s.t-n*T;
+    vT=tc<0.12?a.rodV*2.2:0.05; headT=(n%2?1:-1)*42; dT=0; pitchT=a.restPitch*0.5;
+  }
+  else if(tech==='pop'){
+    const T=1.3, n=Math.floor(s.t/T), tc=s.t-n*T;
+    if(tc<0.16){ vT=a.rodV*2; pitchT=a.restPitch*0.5+25; if(s.n!==n+1){ s.n=n+1; animSplash(); } }
+    else { vT=0; pitchT=a.restPitch; }
+    dT=0;
+  }
+  else if(tech==='liftfall'){
+    if(s.phase==='go'){ vT=a.rodV*1.3; dT=Math.max(0,a.bottom-1.2); dRate=0.8; swim(); if(s.phaseT>=1.2){ s.phase='fall'; s.phaseT=0; } }
+    else { vT=0.12; slack=true; yawO=osc(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01){ s.phase='go'; s.phaseT=0; } }
+  }
+  else if(tech==='stopgo'){
+    const T=3.2, tc=s.t%T;
+    if(tc<2.2) swim(); else { vT=0; slack=true; pitchT=a.restPitch; }
+  }
+  // Fast surge when pulled, slower glide-out when the line goes slack
+  s.v+=(vT-s.v)*Math.min(1,dt*(vT>s.v?8:2.5));
+  s.x+=s.v*dt;
+  if(slack) s.d+=a.freeRate*dt; // + sinks, - rises
+  else { const dd=dT-s.d; s.d+=Math.sign(dd)*Math.min(Math.abs(dd),dRate*dt*Math.min(1.5,Math.max(0.3,s.v/a.rodV))); }
+  s.d=a.surface||tech==='walk'||tech==='pop'?0:Math.max(0,Math.min(a.maxDepth,s.d));
+  s.head+=(headT-s.head)*Math.min(1,dt*10);
+  s.yaw=s.head+yawO;
+  // Sideways drift along the heading; the line slowly pulls the lure back onto the centre line
+  s.lat+=0.6*s.v*Math.sin(s.head*Math.PI/180)*dt; s.lat*=1-Math.min(1,dt*0.6);
+  s.pitch+=(pitchT-s.pitch)*Math.min(1,dt*4);
+  s.roll=rollT;
+  s.hist.push({x:s.x, d:s.d, lat:s.lat});
+  while(s.hist.length && s.x-s.hist[0].x>ANIM_W*0.55/PX_M) s.hist.shift();
+  for(const p of s.splash){ p.life-=dt; p.x+=p.vx*dt; p.h+=p.vh*dt; p.vh-=4*dt; }
+  sim.splash=s.splash.filter(p=>p.life>0);
+}
+function animSplash(){
+  const nose=xRange(sidePts).mx/1000;
+  for(let i=0;i<14;i++) sim.splash.push({x:sim.x+nose+0.01, h:0, vx:0.1+Math.random()*0.5, vh:0.4+Math.random()*0.7, life:0.5+Math.random()*0.3});
+}
+
 function drawAnimation(){
-  const ctx=animCtx;
-  const cw=ANIM_W, ch=ANIM_H;
-  const ph=lastPhys||{H:44,hlRatio:0.33,whRatio:0.5,depth:1.5,wobbleType:'-',wobbleHz:3.6,buoyancyState:'-',pitch:0,speed:3,lipLen:30,lipAng:35,hasLip:true};
-
+  const ctx=animCtx, cw=ANIM_W, ch=ANIM_H, s=sim, ph=lastPhys, side=animView==='side';
+  const X0=cw*0.5, sc=Math.min(0.7,140/ph.L), toX=x=>X0+(x-s.x)*PX_M, DPX=s.depthPx, rad=Math.PI/180;
+  const noseR=xRange(sidePts).mx*sc;
   ctx.clearRect(0,0,cw,ch);
-
-  // Water background
-  const waterY=60;
-  ctx.fillStyle='#0c1829';
-  ctx.fillRect(0,0,cw,waterY);
-  ctx.fillStyle='#0d2847';
-  ctx.fillRect(0,waterY,cw,ch-waterY);
-
-  // Water surface waves
-  ctx.strokeStyle='rgba(34,211,238,0.3)';
-  ctx.lineWidth=1.5;
-  ctx.beginPath();
-  for(let x=0;x<cw;x+=2){
-    const wy=waterY+Math.sin((x+animTime*0.03)*0.04)*4+Math.sin((x+animTime*0.05)*0.07)*2;
-    x===0?ctx.moveTo(x,wy):ctx.lineTo(x,wy);
-  }
-  ctx.stroke();
-
-  // Lure position
-  const t=animTime/1000;
-  const spd=ph.speed;
-
-  // Base movement: lure swims from right to left and back
-  const swimCycle=8/spd; // seconds per cycle
-  const swimPhase=(t%swimCycle)/swimCycle;
-  const baseX=cw*0.3+Math.sin(swimPhase*Math.PI*2)*cw*0.15;
-
-  // Depth
-  const depthPx=waterY+20+ph.depth*25;
-  const baseY=Math.min(depthPx,ch-60);
-
-  // Wobble oscillation
-  // Real wobble frequency (capped so it stays visible); amplitude depends on body shape, not speed
-  const wobbleFreq=2*Math.PI*Math.min(ph.wobbleHz,8);
-  const wobbleAmp=ph.hlRatio*18*1.2;
-  const wobbleAngle=Math.sin(t*wobbleFreq)*wobbleAmp*(Math.PI/180);
-
-  // Rolling
-  const rollAmp=ph.whRatio*8;
-  const rollOffset=Math.sin(t*wobbleFreq*1.3)*rollAmp;
-
-  // Y oscillation (vertical wobble)
-  const yOsc=Math.sin(t*wobbleFreq*0.8)*wobbleAmp*0.15;
-
-  const lureX=baseX;
-  const lureY=baseY+yOsc+rollOffset*(animView==='side'?0.3:0);
-
-  // Draw lure body
-  ctx.save();
-  ctx.translate(lureX,lureY);
-  if(animView==='side'){
-    // Line tension pulls most of the rest posture out while retrieving
-    ctx.rotate(wobbleAngle*0.3+(ph.pitch||0)*0.3*Math.PI/180); // pitch
-    drawLureSide(ctx,ph);
+  ctx.fillStyle='#0d2847'; ctx.fillRect(0,0,cw,ch);
+  ctx.font="10px 'SF Mono',SFMono-Regular,'Courier New',monospace";
+  if(side){
+    ctx.fillStyle='#0c1829'; ctx.fillRect(0,0,cw,WATER_Y);
+    ctx.strokeStyle='rgba(34,211,238,0.35)'; ctx.lineWidth=1.5; ctx.beginPath();
+    for(let x=0;x<=cw;x+=4){ const wx=x+s.x*PX_M, wy=WATER_Y+Math.sin(wx*0.035)*2+Math.sin(wx*0.08+s.t*2)*1; x?ctx.lineTo(x,wy):ctx.moveTo(x,wy); }
+    ctx.stroke();
+    // Depth scale
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.textAlign='left';
+    const step=s.shown<=1.5?0.25:0.5;
+    for(let m=step;WATER_Y+m*DPX<ch;m+=step){ const y=WATER_Y+m*DPX; ctx.beginPath(); ctx.moveTo(30,y); ctx.lineTo(cw,y); ctx.stroke(); ctx.fillText(m.toFixed(2).replace(/0$/,'')+'m',4,y+3); }
   } else {
-    ctx.rotate(wobbleAngle); // full yaw visible from top
-    drawLureTop(ctx,ph);
+    ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(0,ch/2); ctx.lineTo(cw,ch/2); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Particles fixed in the water: they stream past as the lure moves
+  ctx.fillStyle='rgba(180,220,255,0.25)';
+  for(let i=0;i<46;i++){
+    const px=((i*173.7-s.x*PX_M)%cw+cw)%cw, py=side?WATER_Y+8+(i*61.3)%(ch-WATER_Y-12):(i*89.1)%ch;
+    ctx.fillRect(px,py,1.5,1.5);
+  }
+  // Trail: depth path (side) or sideways path (top)
+  // At the surface the lure floats with its nose just out of the water (side view)
+  const float=side?(1-Math.min(1,s.d/0.1))*(Math.max(0,-Math.sin(s.pitch*rad))*noseR*0.85+ph.H*sc*0.2):0;
+  const yOf=h=>side?WATER_Y+h.d*DPX:Math.max(30,Math.min(ch-30,ch/2+h.lat*LAT_PX));
+  ctx.strokeStyle='rgba(34,211,238,0.35)'; ctx.lineWidth=2; ctx.beginPath();
+  s.hist.forEach((h,i)=>{ const x=toX(h.x), y=yOf(h); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+  // Surface rings while working the surface (top view)
+  const ly=yOf(s)+float;
+  if(!side && s.d<0.02 && s.v>0.05){ ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(X0+xRange(topPts).mx*sc, ly, 6*k+(s.t*20%6), -Math.PI/3, Math.PI/3); ctx.stroke(); } }
+
+  // Lure
+  ctx.save(); ctx.translate(X0,ly);
+  if(side){
+    ctx.rotate(s.pitch*rad);
+    ctx.scale(Math.max(0.3,Math.cos(s.yaw*rad)), 1-0.25*Math.abs(Math.sin(s.roll*rad)));
+    drawLureSide(ctx,ph,sc);
+  } else {
+    ctx.globalAlpha=Math.max(0.35,1-s.d*0.35); // deeper = fainter from above
+    ctx.rotate(s.yaw*rad);
+    ctx.scale(1, 0.45+0.55*Math.abs(Math.cos(s.roll*rad)));
+    drawLureTop(ctx,ph,sc);
   }
   ctx.restore();
-
-  // Line
-  ctx.strokeStyle='rgba(255,255,255,0.15)';
-  ctx.lineWidth=1;
-  ctx.setLineDash([4,4]);
-  ctx.beginPath();
-  ctx.moveTo(cw-20,waterY-10);
-  ctx.quadraticCurveTo(cw*0.7,waterY+10,lureX+20,lureY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Depth indicator
-  ctx.fillStyle='rgba(255,255,255,0.3)';
-  ctx.font="11px 'SF Mono',SFMono-Regular,'Courier New',monospace";
-  ctx.textAlign='right';
-  ctx.fillText(ph.depth.toFixed(1)+'m',cw-15,baseY+4);
-
-  // Trail (movement history)
-  ctx.save();
-  ctx.strokeStyle='rgba(34,211,238,0.08)';
-  ctx.lineWidth=ph.H*0.25;
-  ctx.lineCap='round';
-  ctx.beginPath();
-  for(let i=0;i<30;i++){
-    const tt=t-i*0.03;
-    const tp=(((tt%(swimCycle))/swimCycle)+1)%1;
-    const tx=cw*0.3+Math.sin(tp*Math.PI*2)*cw*0.15;
-    const tw=Math.sin(tt*wobbleFreq)*wobbleAmp*0.3;
-    const ty=baseY+Math.sin(tt*wobbleFreq*0.8)*wobbleAmp*0.15;
-    i===0?ctx.moveTo(tx,ty+tw):ctx.lineTo(tx,ty+tw);
+  // Line from the nose to the rod
+  const ang=(side?s.pitch:s.yaw)*rad, nx=X0+Math.cos(ang)*noseR, ny=ly+Math.sin(ang)*noseR;
+  ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(nx,ny);
+  if(side) ctx.quadraticCurveTo(cw*0.85,WATER_Y+8,cw-6,14); else ctx.quadraticCurveTo(cw*0.85,ch/2,cw,ch/2);
+  ctx.stroke(); ctx.setLineDash([]);
+  // Splashes
+  ctx.fillStyle='rgba(220,240,255,0.8)';
+  for(const p of s.splash){
+    const x=toX(p.x);
+    if(side) ctx.fillRect(x, WATER_Y-p.h*90, 2.5, 2.5);
+    else { ctx.beginPath(); ctx.arc(x, ly+(p.vx-0.35)*60, 1.5+p.h*3, 0, Math.PI*2); ctx.fill(); }
   }
-  ctx.stroke();
-  ctx.restore();
-
-  // Info text (written only when it changes, not every frame)
-  const info=(animView==='side'?'측면':'상면')+' | '+
-    ph.wobbleType+' '+ph.wobbleHz.toFixed(1)+'Hz | 잠행 '+ph.depth.toFixed(1)+'m | '+ph.buoyancyState;
-  if(info!==animInfoText){ animInfoText=info; document.getElementById('animInfo').textContent=info; }
+  // Current depth / speed
+  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.textAlign='right';
+  ctx.fillText('수심 '+s.d.toFixed(2)+' m · '+s.v.toFixed(2)+' m/s', cw-8, ch-8);
 }
 
 // Closed smooth outline (same curve as smoothPath) scaled by sc
@@ -1808,8 +1939,7 @@ function traceBody(ctx, pts, sc){
   ctx.fill();ctx.stroke();
 }
 
-function drawLureSide(ctx,ph){
-  const sc=0.9; // scale
+function drawLureSide(ctx,ph,sc){
   traceBody(ctx,sidePts,sc);
 
   // Eye
@@ -1832,8 +1962,7 @@ function drawLureSide(ctx,ph){
   }
 }
 
-function drawLureTop(ctx,ph){
-  const sc=0.9;
+function drawLureTop(ctx,ph,sc){
   traceBody(ctx,topPts,sc);
   const nose=topPts[0].x;
 
