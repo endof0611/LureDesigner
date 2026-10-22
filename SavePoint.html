@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>위치 & 사진 메모장</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            iosBg: '#F2F2F7',
+            iosCard: '#FFFFFF',
+            iosBlue: '#007AFF',
+            iosGreen: '#34C759',
+            iosRed: '#FF3B30',
+            iosGray: '#8E8E93',
+            iosLightGray: '#E5E5EA',
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* iOS Custom Aesthetics */
+    body {
+      background-color: #F2F2F7;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .ios-blur {
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .ios-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+    .leaflet-container {
+      border-radius: 12px;
+      z-index: 10;
+    }
+    /* Hide scrollbar for clean app view */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="text-slate-900 pb-12 min-h-screen">
+
+  <!-- Header Header / Status Bar -->
+  <header class="sticky top-0 z-40 bg-[#F2F2F7]/80 ios-blur pt-8 pb-3 px-5 border-b border-gray-200 flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">위치 & 메모 기록</h1>
+      <p class="text-xs text-slate-500 font-medium">아이폰 로컬 보안 데이터베이스 (IndexedDB)</p>
+    </div>
+    <div class="bg-blue-50 text-iosBlue p-2.5 rounded-full flex items-center justify-center">
+      <i data-lucide="map-pin" class="w-5 h-5"></i>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4 space-y-5">
+
+    <!-- FORM CARD: Entry Section -->
+    <section class="ios-card p-4 space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+        <h2 class="text-base font-semibold flex items-center gap-2 text-slate-800">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-iosBlue"></i> 새 기록 작성
+        </h2>
+        <span id="gpsBadge" class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> GPS 미수집
+        </span>
+      </div>
+
+      <!-- 1. GPS Location Button & Display -->
+      <div>
+        <button id="btnGetLocation" onclick="getLocation()" class="w-full py-3 px-4 bg-iosBlue hover:bg-blue-600 active:scale-[0.98] transition-all text-white font-semibold text-sm rounded-xl shadow-sm flex items-center justify-center gap-2">
+          <i data-lucide="crosshair" class="w-4 h-4"></i>
+          <span>현재 위치 가져오기</span>
+        </button>
+
+        <!-- Location Status Details -->
+        <div id="locationInfo" class="hidden mt-2 p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-xs text-blue-900 space-y-1">
+          <div class="font-medium flex justify-between items-center">
+            <span class="flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-iosBlue"></i> 좌표 수집 성공</span>
+            <span id="coordsDisplay" class="font-mono text-[11px] text-blue-700"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Photo Attachment & Camera -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">사진 첨부 (촬영 / 앨범)</label>
+        
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processPhoto(event)" class="hidden">
+        
+        <div id="photoArea" class="flex gap-2">
+          <button onclick="document.getElementById('cameraInput').click()" class="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] transition-all text-slate-700 font-medium text-sm rounded-xl flex items-center justify-center gap-2 border border-slate-200">
+            <i data-lucide="camera" class="w-4 h-4 text-slate-600"></i>
+            <span>사진 촬영 / 선택</span>
+          </button>
+        </div>
+
+        <!-- Photo Preview Area -->
+        <div id="previewContainer" class="hidden relative mt-2 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+          <img id="imgPreview" class="w-full max-h-56 object-cover" alt="미리보기">
+          <button onclick="removePreview()" class="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-black/80 transition-all">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Notes Area -->
+      <div>
+        <label for="memoInput" class="block text-xs font-semibold text-slate-500 mb-1.5">메모 작성 (선택)</label>
+        <textarea id="memoInput" rows="3" placeholder="이 장소에 대한 메모나 일기를 적어보세요..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-iosBlue/50 transition-all resize-none placeholder:text-slate-400"></textarea>
+      </div>
+
+      <!-- 4. Save Button -->
+      <button onclick="saveRecord()" class="w-full py-3.5 px-4 bg-iosGreen hover:bg-emerald-600 active:scale-[0.98] transition-all text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2">
+        <i data-lucide="save" class="w-4 h-4"></i>
+        <span>기록 저장하기</span>
+      </button>
+    </section>
+
+    <!-- RECORD LIST SECTION -->
+    <section class="space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-slate-600"></i> 저장된 기록 목록
+        </h2>
+        <span id="recordCount" class="text-xs font-semibold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">0개</span>
+      </div>
+
+      <!-- Dynamic Cards Container -->
+      <div id="recordsContainer" class="space-y-3">
+        <!-- JS rendered record cards will appear here -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MAP MODAL -->
+  <div id="mapModal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+    <div class="ios-card w-full max-w-lg rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col max-h-[85vh] bg-white">
+      
+      <div class="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-slate-800 text-base flex items-center gap-1.5">
+            <i data-lucide="map-pin" class="w-4 h-4 text-iosBlue"></i> <span id="modalTitle">위치 확인</span>
+          </h3>
+          <p id="modalSubtitle" class="text-xs text-slate-500 font-mono mt-0.5"></p>
+        </div>
+        <button onclick="closeMapModal()" class="p-1.5 bg-slate-200 hover:bg-slate-300 rounded-full text-slate-600 transition-all">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Leaflet Map Container -->
+      <div id="leafletMap" class="w-full h-80 bg-slate-100"></div>
+
+      <div class="p-3 bg-white flex justify-end border-t border-slate-100">
+        <button onclick="closeMapModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    // State Variables
+    let currentCoords = null;
+    let currentPhotoBase64 = "";
+    let leafletMapInstance = null;
+    let leafletMarker = null;
+
+    // IndexedDB Instance
+    let db = null;
+
+    // Initialize Lucide Icons & IndexedDB
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      initDB();
+    });
+
+    // 1. IndexedDB Initialization
+    function initDB() {
+      const request = indexedDB.open("iOSLocationLoggerDB", 1);
+
+      request.onupgradeneeded = (e) => {
+        db = e.target.result;
+        if (!db.objectStoreNames.contains("logs")) {
+          db.createObjectStore("logs", { keyPath: "id", autoIncrement: true });
+        }
+      };
+
+      request.onsuccess = (e) => {
+        db = e.target.result;
+        loadRecords();
+      };
+
+      request.onerror = (e) => {
+        console.error("IndexedDB error:", e.target.error);
+        alert("로컬 데이터베이스 연결에 실패했습니다.");
+      };
+    }
+
+    // 2. Geolocation Handler
+    function getLocation() {
+      const badge = document.getElementById("gpsBadge");
+      const infoBox = document.getElementById("locationInfo");
+      const coordsDisplay = document.getElementById("coordsDisplay");
+
+      if (!navigator.geolocation) {
+        alert("이 브라우저/기기는 위치 서비스를 지원하지 않습니다.");
+        return;
+      }
+
+      badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1";
+      badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> 수집 중...`;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          currentCoords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          };
+
+          badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1";
+          badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> GPS 수집 완료`;
+
+          coordsDisplay.innerText = `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)}`;
+          infoBox.classList.remove("hidden");
+        },
+        (err) => {
+          badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 flex items-center gap-1";
+          badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 수집 실패`;
+          alert("위치 정보를 불러올 수 없습니다: " + err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    // 3. Photo Canvas Resizing & Base64 Converter
+    function processPhoto(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // Canvas setup for 800px constraint
+          const canvas = document.createElement("canvas");
+          const maxDimension = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Compress image to JPEG format with 0.75 quality
+          currentPhotoBase64 = canvas.toDataURL("image/jpeg", 0.75);
+
+          // UI Preview Display
+          document.getElementById("imgPreview").src = currentPhotoBase64;
+          document.getElementById("previewContainer").classList.remove("hidden");
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removePreview() {
+      currentPhotoBase64 = "";
+      document.getElementById("cameraInput").value = "";
+      document.getElementById("previewContainer").classList.add("hidden");
+      document.getElementById("imgPreview").src = "";
+    }
+
+    // 4. Save Record to IndexedDB
+    function saveRecord() {
+      if (!currentCoords) {
+        alert("먼저 '현재 위치 가져오기' 버튼을 눌러 위치 좌표를 수집해 주세요.");
+        return;
+      }
+
+      const memo = document.getElementById("memoInput").value.trim();
+
+      const recordData = {
+        timestamp: new Date().toISOString(),
+        formattedTime: new Date().toLocaleString('ko-KR', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }),
+        lat: currentCoords.lat,
+        lng: currentCoords.lng,
+        photo: currentPhotoBase64,
+        memo: memo
+      };
+
+      const transaction = db.transaction(["logs"], "readwrite");
+      const store = transaction.objectStore("logs");
+      const addRequest = store.add(recordData);
+
+      addRequest.onsuccess = () => {
+        // Reset Inputs
+        document.getElementById("memoInput").value = "";
+        removePreview();
+        
+        // Reset Location state
+        currentCoords = null;
+        document.getElementById("locationInfo").classList.add("hidden");
+        const badge = document.getElementById("gpsBadge");
+        badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1";
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> GPS 미수집`;
+
+        // Refresh List
+        loadRecords();
+      };
+
+      addRequest.onerror = (err) => {
+        alert("기록 저장 중 오류가 발생했습니다.");
+        console.error(err);
+      };
+    }
+
+    // 5. Load and Render Records
+    function loadRecords() {
+      const container = document.getElementById("recordsContainer");
+      const countEl = document.getElementById("recordCount");
+      container.innerHTML = "";
+
+      const transaction = db.transaction(["logs"], "readonly");
+      const store = transaction.objectStore("logs");
+      const request = store.openCursor(null, "prev"); // Newest first
+
+      let totalCount = 0;
+
+      request.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          totalCount++;
+          const item = cursor.value;
+
+          const card = document.createElement("div");
+          card.className = "ios-card p-4 space-y-3 relative border border-slate-100 transition-all";
+
+          card.innerHTML = `
+            <!-- Top Header info -->
+            <div class="flex items-start justify-between pr-8">
+              <div>
+                <span class="text-xs font-semibold text-slate-400 block">${item.formattedTime}</span>
+                <button onclick="openMapModal(${item.lat}, ${item.lng}, '${item.formattedTime}')" class="mt-0.5 text-xs font-mono font-medium text-iosBlue hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+                  <span>${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Delete Button -->
+            <button onclick="deleteRecord(${item.id})" class="absolute top-3.5 right-3.5 text-slate-400 hover:text-iosRed p-1.5 rounded-full hover:bg-rose-50 transition-all" title="삭제">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Memo Content -->
+            ${item.memo ? `<p class="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap bg-slate-50 p-2.5 rounded-xl border border-slate-100">${escapeHtml(item.memo)}</p>` : ''}
+
+            <!-- Photo Preview -->
+            ${item.photo ? `
+              <div class="rounded-xl overflow-hidden border border-slate-200">
+                <img src="${item.photo}" class="w-full max-h-64 object-cover" alt="저장된 사진" loading="lazy">
+              </div>
+            ` : ''}
+          `;
+
+          container.appendChild(card);
+          cursor.continue();
+        } else {
+          countEl.innerText = `${totalCount}개`;
+
+          if (totalCount === 0) {
+            container.innerHTML = `
+              <div class="ios-card p-8 text-center space-y-2 border border-dashed border-slate-300">
+                <div class="w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto">
+                  <i data-lucide="inbox" class="w-5 h-5"></i>
+                </div>
+                <p class="text-sm font-medium text-slate-600">저장된 위치 메모가 없습니다.</p>
+                <p class="text-xs text-slate-400">위의 버튼을 통해 첫 번째 위치를 기록해보세요.</p>
+              </div>
+            `;
+          }
+          lucide.createIcons();
+        }
+      };
+    }
+
+    // 6. Delete Record
+    function deleteRecord(id) {
+      if (!confirm("이 기록을 삭제하시겠습니까?")) return;
+
+      const transaction = db.transaction(["logs"], "readwrite");
+      const store = transaction.objectStore("logs");
+      const deleteRequest = store.delete(id);
+
+      deleteRequest.onsuccess = () => {
+        loadRecords();
+      };
+    }
+
+    // 7. Interactive Leaflet Map Modal
+    function openMapModal(lat, lng, timeStr) {
+      document.getElementById("modalTitle").innerText = "저장된 위치 정보";
+      document.getElementById("modalSubtitle").innerText = `좌표: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${timeStr})`;
+      document.getElementById("mapModal").classList.remove("hidden");
+
+      setTimeout(() => {
+        if (!leafletMapInstance) {
+          // Initialize map instance
+          leafletMapInstance = L.map('leafletMap').setView([lat, lng], 16);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+          }).addTo(leafletMapInstance);
+
+          leafletMarker = L.marker([lat, lng]).addTo(leafletMapInstance);
+        } else {
+          leafletMapInstance.invalidateSize();
+          leafletMapInstance.setView([lat, lng], 16);
+          leafletMarker.setLatLng([lat, lng]);
+        }
+      }, 150);
+    }
+
+    function closeMapModal() {
+      document.getElementById("mapModal").classList.add("hidden");
+    }
+
+    // Helper Utility: Prevent XSS
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
