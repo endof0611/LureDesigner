@@ -8,7 +8,7 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 
   <!-- Leaflet CSS & JS for Interactive Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -67,7 +67,7 @@
   <header class="sticky top-0 z-40 bg-[#F2F2F7]/80 ios-blur pt-8 pb-3 px-5 border-b border-gray-200 flex justify-between items-center">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900">위치 & 메모 기록</h1>
-      <p class="text-xs text-slate-500 font-medium">아이폰 로컬 보안 데이터베이스 (IndexedDB)</p>
+      <p class="text-xs text-slate-500 font-medium">이 기기에만 저장 (IndexedDB) · <span id="persistStatus">저장소 확인 중...</span></p>
     </div>
     <div class="bg-blue-50 text-iosBlue p-2.5 rounded-full flex items-center justify-center">
       <i data-lucide="map-pin" class="w-5 h-5"></i>
@@ -132,7 +132,7 @@
       </div>
 
       <!-- 4. Save Button -->
-      <button onclick="saveRecord()" class="w-full py-3.5 px-4 bg-iosGreen hover:bg-emerald-600 active:scale-[0.98] transition-all text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2">
+      <button id="btnSave" onclick="saveRecord()" class="w-full py-3.5 px-4 bg-iosGreen hover:bg-emerald-600 active:scale-[0.98] transition-all text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2">
         <i data-lucide="save" class="w-4 h-4"></i>
         <span>기록 저장하기</span>
       </button>
@@ -145,6 +145,22 @@
           <i data-lucide="history" class="w-5 h-5 text-slate-600"></i> 저장된 기록 목록
         </h2>
         <span id="recordCount" class="text-xs font-semibold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">0개</span>
+      </div>
+
+      <!-- Local Backup (JSON file on this device) -->
+      <div class="ios-card p-3 space-y-2">
+        <div class="flex gap-2">
+          <button onclick="exportRecords()" class="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] transition-all text-slate-700 font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 border border-slate-200">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>백업 파일로 내보내기</span>
+          </button>
+          <button onclick="document.getElementById('importInput').click()" class="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] transition-all text-slate-700 font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 border border-slate-200">
+            <i data-lucide="upload" class="w-4 h-4"></i>
+            <span>백업 파일 불러오기</span>
+          </button>
+        </div>
+        <input type="file" id="importInput" accept="application/json,.json" onchange="importRecords(event)" class="hidden">
+        <p class="text-[11px] text-slate-400 leading-snug">기록은 이 기기의 브라우저에만 저장됩니다. Safari는 홈 화면에 추가하지 않은 사이트의 데이터를 장기간 미사용 시 지울 수 있으니, 공유 → 홈 화면에 추가 후 사용하고 주기적으로 백업 파일을 내보내 두세요.</p>
       </div>
 
       <!-- Dynamic Cards Container -->
@@ -189,15 +205,40 @@
     let currentPhotoBase64 = "";
     let leafletMapInstance = null;
     let leafletMarker = null;
+    let photoProcessing = false;
 
-    // IndexedDB Instance
+    // IndexedDB Instance (records stay on this phone only, nothing is sent anywhere)
     let db = null;
 
     // Initialize Lucide Icons & IndexedDB
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
       initDB();
+      requestPersistentStorage();
     });
+
+    // Ask the browser not to auto-delete this phone's local data (no network use)
+    async function requestPersistentStorage() {
+      const statusEl = document.getElementById("persistStatus");
+      if (!navigator.storage || !navigator.storage.persist) {
+        statusEl.innerText = "영구 저장 미지원";
+        return;
+      }
+      try {
+        const persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+        statusEl.innerText = persisted ? "영구 저장 허용됨" : "영구 저장 미허용 (백업 권장)";
+      } catch (e) {
+        statusEl.innerText = "영구 저장 확인 실패";
+      }
+    }
+
+    function ensureDB() {
+      if (!db) {
+        alert("로컬 데이터베이스를 준비 중입니다. 잠시 후 다시 시도해 주세요.");
+        return false;
+      }
+      return true;
+    }
 
     // 1. IndexedDB Initialization
     function initDB() {
@@ -239,13 +280,14 @@
         (pos) => {
           currentCoords = {
             lat: pos.coords.latitude,
-            lng: pos.coords.longitude
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
           };
 
           badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1";
           badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> GPS 수집 완료`;
 
-          coordsDisplay.innerText = `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)}`;
+          coordsDisplay.innerText = `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)} (±${Math.round(currentCoords.accuracy)}m)`;
           infoBox.classList.remove("hidden");
         },
         (err) => {
@@ -262,9 +304,18 @@
       const file = event.target.files[0];
       if (!file) return;
 
+      setPhotoProcessing(true);
       const reader = new FileReader();
+      reader.onerror = function() {
+        setPhotoProcessing(false);
+        alert("사진을 읽을 수 없습니다.");
+      };
       reader.onload = function(e) {
         const img = new Image();
+        img.onerror = function() {
+          setPhotoProcessing(false);
+          alert("사진 형식을 처리할 수 없습니다.");
+        };
         img.onload = function() {
           // Canvas setup for 800px constraint
           const canvas = document.createElement("canvas");
@@ -292,10 +343,20 @@
           // UI Preview Display
           document.getElementById("imgPreview").src = currentPhotoBase64;
           document.getElementById("previewContainer").classList.remove("hidden");
+          setPhotoProcessing(false);
         };
         img.src = e.target.result;
       };
       reader.readAsDataURL(file);
+    }
+
+    // Block saving while a photo is still being resized
+    function setPhotoProcessing(on) {
+      photoProcessing = on;
+      const btn = document.getElementById("btnSave");
+      btn.disabled = on;
+      btn.classList.toggle("opacity-50", on);
+      btn.querySelector("span").innerText = on ? "사진 처리 중..." : "기록 저장하기";
     }
 
     function removePreview() {
@@ -307,6 +368,11 @@
 
     // 4. Save Record to IndexedDB
     function saveRecord() {
+      if (!ensureDB()) return;
+      if (photoProcessing) {
+        alert("사진을 처리하는 중입니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
       if (!currentCoords) {
         alert("먼저 '현재 위치 가져오기' 버튼을 눌러 위치 좌표를 수집해 주세요.");
         return;
@@ -322,6 +388,7 @@
         }),
         lat: currentCoords.lat,
         lng: currentCoords.lng,
+        accuracy: currentCoords.accuracy,
         photo: currentPhotoBase64,
         memo: memo
       };
@@ -356,6 +423,7 @@
     function loadRecords() {
       const container = document.getElementById("recordsContainer");
       const countEl = document.getElementById("recordCount");
+      if (!db) return;
       container.innerHTML = "";
 
       const transaction = db.transaction(["logs"], "readonly");
@@ -377,10 +445,10 @@
             <!-- Top Header info -->
             <div class="flex items-start justify-between pr-8">
               <div>
-                <span class="text-xs font-semibold text-slate-400 block">${item.formattedTime}</span>
-                <button onclick="openMapModal(${item.lat}, ${item.lng}, '${item.formattedTime}')" class="mt-0.5 text-xs font-mono font-medium text-iosBlue hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                <span class="text-xs font-semibold text-slate-400 block">${escapeHtml(String(item.formattedTime))}</span>
+                <button onclick="openMapModal(${item.lat}, ${item.lng}, ${escapeHtml(JSON.stringify(String(item.formattedTime)))})" class="mt-0.5 text-xs font-mono font-medium text-iosBlue hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
                   <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
-                  <span>${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}</span>
+                  <span>${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}${typeof item.accuracy === "number" ? ` (±${Math.round(item.accuracy)}m)` : ""}</span>
                 </button>
               </div>
             </div>
@@ -396,7 +464,7 @@
             <!-- Photo Preview -->
             ${item.photo ? `
               <div class="rounded-xl overflow-hidden border border-slate-200">
-                <img src="${item.photo}" class="w-full max-h-64 object-cover" alt="저장된 사진" loading="lazy">
+                <img src="${escapeHtml(item.photo)}" class="w-full max-h-64 object-cover" alt="저장된 사진" loading="lazy">
               </div>
             ` : ''}
           `;
@@ -424,6 +492,7 @@
 
     // 6. Delete Record
     function deleteRecord(id) {
+      if (!ensureDB()) return;
       if (!confirm("이 기록을 삭제하시겠습니까?")) return;
 
       const transaction = db.transaction(["logs"], "readwrite");
@@ -446,7 +515,7 @@
           // Initialize map instance
           leafletMapInstance = L.map('leafletMap').setView([lat, lng], 16);
 
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap'
           }).addTo(leafletMapInstance);
@@ -462,6 +531,90 @@
 
     function closeMapModal() {
       document.getElementById("mapModal").classList.add("hidden");
+    }
+
+    // 8. Local Backup: export to / import from a JSON file on this phone
+    function exportRecords() {
+      if (!ensureDB()) return;
+      const request = db.transaction(["logs"], "readonly").objectStore("logs").getAll();
+
+      request.onsuccess = () => {
+        const records = request.result;
+        if (records.length === 0) {
+          alert("내보낼 기록이 없습니다.");
+          return;
+        }
+        const payload = JSON.stringify({ app: "SavePoint", version: 1, exportedAt: new Date().toISOString(), records: records });
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const d = new Date();
+        const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+        a.href = url;
+        a.download = `SavePoint_backup_${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+
+      request.onerror = (err) => {
+        alert("백업 파일 생성 중 오류가 발생했습니다.");
+        console.error(err);
+      };
+    }
+
+    function importRecords(event) {
+      const file = event.target.files[0];
+      event.target.value = "";
+      if (!file || !ensureDB()) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        let records;
+        try {
+          const parsed = JSON.parse(e.target.result);
+          records = Array.isArray(parsed) ? parsed : parsed.records;
+          if (!Array.isArray(records)) throw new Error("records missing");
+        } catch (err) {
+          alert("올바른 백업 파일이 아닙니다.");
+          return;
+        }
+
+        // Keep only well-formed records; skip ones already stored (same timestamp + coords)
+        const valid = records.filter(r => r && typeof r.lat === "number" && typeof r.lng === "number" && typeof r.timestamp === "string");
+        const existingReq = db.transaction(["logs"], "readonly").objectStore("logs").getAll();
+
+        existingReq.onsuccess = () => {
+          const keyOf = r => `${r.timestamp}|${r.lat}|${r.lng}`;
+          const existing = new Set(existingReq.result.map(keyOf));
+          const toAdd = valid.filter(r => !existing.has(keyOf(r)));
+
+          const tx = db.transaction(["logs"], "readwrite");
+          const store = tx.objectStore("logs");
+          toAdd.forEach(r => {
+            store.add({
+              timestamp: r.timestamp,
+              formattedTime: typeof r.formattedTime === "string" ? r.formattedTime : r.timestamp,
+              lat: r.lat,
+              lng: r.lng,
+              accuracy: typeof r.accuracy === "number" ? r.accuracy : null,
+              photo: typeof r.photo === "string" && r.photo.startsWith("data:image/") ? r.photo : "",
+              memo: typeof r.memo === "string" ? r.memo : ""
+            });
+          });
+
+          tx.oncomplete = () => {
+            alert(`${toAdd.length}개 기록을 불러왔습니다. (중복/잘못된 항목 ${records.length - toAdd.length}개 제외)`);
+            loadRecords();
+          };
+          tx.onerror = (err) => {
+            alert("백업 불러오기 중 오류가 발생했습니다.");
+            console.error(err);
+          };
+        };
+      };
+      reader.readAsText(file);
     }
 
     // Helper Utility: Prevent XSS
