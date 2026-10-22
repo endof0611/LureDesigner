@@ -100,8 +100,14 @@
             <span class="flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-iosBlue"></i> 좌표 수집 성공</span>
             <span id="coordsDisplay" class="font-mono text-[11px] text-blue-700"></span>
           </div>
-          <!-- Current Location Map -->
-          <div id="currentMap" class="w-full h-48 mt-2 bg-slate-100" style="height: 12rem;"></div>
+        </div>
+
+        <!-- Current Location Map (always visible) -->
+        <div class="relative mt-2" style="position: relative;">
+          <div id="currentMap" class="w-full bg-slate-100" style="height: 14rem;"></div>
+          <div id="currentMapHint" class="absolute inset-0 flex items-center justify-center pointer-events-none" style="position: absolute; inset: 0; z-index: 20; pointer-events: none; display: flex; align-items: center; justify-content: center;">
+            <span class="text-xs font-medium text-slate-600 bg-white/90 px-3 py-1.5 rounded-full shadow-sm">'현재 위치 가져오기'를 누르면 지도에 표시됩니다</span>
+          </div>
         </div>
       </div>
 
@@ -220,6 +226,7 @@
       lucide.createIcons();
       initDB();
       requestPersistentStorage();
+      initCurrentMap();
     });
 
     // Ask the browser not to auto-delete this phone's local data (no network use)
@@ -305,16 +312,23 @@
       );
     }
 
+    // Inline map under the location button, shown from page load (Korea overview)
+    const DEFAULT_MAP_CENTER = [36.5, 127.8];
+    const DEFAULT_MAP_ZOOM = 6;
+
+    function initCurrentMap() {
+      currentMapInstance = L.map('currentMap').setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(currentMapInstance);
+    }
+
     // Show the fetched location on the inline map with its accuracy radius
     function showCurrentLocationMap(coords) {
       const latlng = [coords.lat, coords.lng];
 
-      if (!currentMapInstance) {
-        currentMapInstance = L.map('currentMap').setView(latlng, 17);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap'
-        }).addTo(currentMapInstance);
+      if (!currentMarker) {
         currentMarker = L.marker(latlng).addTo(currentMapInstance);
         currentAccuracyCircle = L.circle(latlng, {
           radius: coords.accuracy,
@@ -328,11 +342,21 @@
         currentAccuracyCircle.setLatLng(latlng).setRadius(coords.accuracy);
       }
 
-      // The container was hidden until now, so recompute its size before fitting
-      setTimeout(() => {
-        currentMapInstance.invalidateSize();
-        currentMapInstance.fitBounds(currentAccuracyCircle.getBounds(), { maxZoom: 18 });
-      }, 50);
+      document.getElementById("currentMapHint").style.display = "none";
+      currentMapInstance.invalidateSize();
+      currentMapInstance.fitBounds(currentAccuracyCircle.getBounds(), { maxZoom: 18 });
+    }
+
+    // Back to the overview after a record is saved
+    function resetCurrentLocationMap() {
+      if (currentMarker) {
+        currentMarker.remove();
+        currentAccuracyCircle.remove();
+        currentMarker = null;
+        currentAccuracyCircle = null;
+      }
+      document.getElementById("currentMapHint").style.display = "flex";
+      currentMapInstance.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
     }
 
     // 3. Photo Canvas Resizing & Base64 Converter
@@ -441,6 +465,7 @@
         // Reset Location state
         currentCoords = null;
         document.getElementById("locationInfo").classList.add("hidden");
+        resetCurrentLocationMap();
         const badge = document.getElementById("gpsBadge");
         badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1";
         badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> GPS 미수집`;
