@@ -100,6 +100,8 @@
             <span class="flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-iosBlue"></i> 좌표 수집 성공</span>
             <span id="coordsDisplay" class="font-mono text-[11px] text-blue-700"></span>
           </div>
+          <!-- Current Location Map -->
+          <div id="currentMap" class="w-full h-48 mt-2 bg-slate-100" style="height: 12rem;"></div>
         </div>
       </div>
 
@@ -205,6 +207,9 @@
     let currentPhotoBase64 = "";
     let leafletMapInstance = null;
     let leafletMarker = null;
+    let currentMapInstance = null;
+    let currentMarker = null;
+    let currentAccuracyCircle = null;
     let photoProcessing = false;
 
     // IndexedDB Instance (records stay on this phone only, nothing is sent anywhere)
@@ -289,6 +294,7 @@
 
           coordsDisplay.innerText = `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)} (±${Math.round(currentCoords.accuracy)}m)`;
           infoBox.classList.remove("hidden");
+          showCurrentLocationMap(currentCoords);
         },
         (err) => {
           badge.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 flex items-center gap-1";
@@ -297,6 +303,36 @@
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
+    }
+
+    // Show the fetched location on the inline map with its accuracy radius
+    function showCurrentLocationMap(coords) {
+      const latlng = [coords.lat, coords.lng];
+
+      if (!currentMapInstance) {
+        currentMapInstance = L.map('currentMap').setView(latlng, 17);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(currentMapInstance);
+        currentMarker = L.marker(latlng).addTo(currentMapInstance);
+        currentAccuracyCircle = L.circle(latlng, {
+          radius: coords.accuracy,
+          color: '#007AFF',
+          fillColor: '#007AFF',
+          fillOpacity: 0.12,
+          weight: 1
+        }).addTo(currentMapInstance);
+      } else {
+        currentMarker.setLatLng(latlng);
+        currentAccuracyCircle.setLatLng(latlng).setRadius(coords.accuracy);
+      }
+
+      // The container was hidden until now, so recompute its size before fitting
+      setTimeout(() => {
+        currentMapInstance.invalidateSize();
+        currentMapInstance.fitBounds(currentAccuracyCircle.getBounds(), { maxZoom: 18 });
+      }, 50);
     }
 
     // 3. Photo Canvas Resizing & Base64 Converter
