@@ -271,7 +271,8 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트</span><span class="slider-value" id="weightSum">-</span></div>
         <div class="seg" id="weightTabs" style="flex-wrap:wrap"></div>
         <div style="display:flex;gap:4px"><button class="btn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div>
-        <div id="weightNote" style="font-size:10px;color:#f59e0b;line-height:1.4;margin-top:6px;display:none"></div></div>
+        <div id="weightNote" style="font-size:10px;color:#f59e0b;line-height:1.4;margin-top:6px;display:none"></div>
+        <div id="weightOut" style="font-size:10px;color:#fb923c;line-height:1.4;margin-top:6px;display:none"></div></div>
       <div id="weightEdit">
       <div class="slider-group"><div class="slider-header"><span class="control-label">무게 (g)</span><span class="slider-value" id="weightVal">5</span></div>
         <input type="range" min="0.5" max="100" value="5" step="0.5" id="weightSlider" oninput="setWeightProp('g',+this.value)"></div>
@@ -279,7 +280,7 @@
         <input type="range" min="5" max="95" value="50" id="weightPosSlider" oninput="setWeightProp('pos',+this.value)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">지름 (mm)</span><span class="slider-value" id="weightDiaVal">-</span></div>
         <input type="range" min="1" max="30" value="8" step="0.5" id="weightDiaSlider" oninput="setWeightProp('d',+this.value)"></div>
-      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">납 기준 · 같은 무게에서 지름↓ 길쭉(슬러그), 지름↑ 둥글게(볼) · 바디 밖으로 나가지 않도록 자동 제한 · 측면 뷰에서 드래그로 위치 이동</span></div>
+      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">납 기준 · 같은 무게에서 지름↓ 길쭉(슬러그), 지름↑ 둥글게(볼) · 코끝·꼬리끝은 넘지 않고, 위아래·좌우는 외곽선 밖으로 나올 수 있음 · 측면 뷰에서 드래그로 위치 이동</span></div>
       </div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
         <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
@@ -379,7 +380,7 @@
       <button class="btn" onclick="animSaveRef()">📌 기준 저장</button>
       <button class="btn" id="animClearBtn" onclick="animClearRef()" disabled>기준 해제</button>
     </div>
-    <div class="anim-note">기준 저장 후 디자인을 수정하고 다시 열면, 저장한 궤적(주황 점선)·그래프와 수치 변화를 비교할 수 있습니다.</div>
+    <div class="anim-note">기준 저장 후 디자인을 수정하고 다시 열면, 저장한 궤적(주황 점선)·그래프와 수치 변화를 비교할 수 있습니다. 기준은 이 브라우저에 저장되어 새로고침해도 유지됩니다.</div>
   </div>
 </div>
 
@@ -608,7 +609,13 @@ function applyPreset(cat, key) {
   const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
   setCtl('hookSize',hookR);
   setCtl('density',p.density);
-  weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>{ const d=w.d||autoDia(w.g); return {pos:w.pos, g:w.g, d, dp:d}; }); selWeight=0;
+  // Default diameter: the usual slug shape, or the nearest that stays inside this body's outline
+  const [wsF,wtF]=bodyOutlines();
+  weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>{
+    let d=w.d||autoDia(w.g);
+    if(!w.d && !weightInside({...w,d},wsF,wtF)) d=WEIGHT_DIAS.slice().sort((a,b)=>Math.abs(a-d)-Math.abs(b-d)).find(x=>weightInside({...w,d:x},wsF,wtF))??d;
+    return {pos:w.pos, g:w.g, d, dp:d};
+  }); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
@@ -975,7 +982,7 @@ function doRender() {
   renderPending=false;
   applySym();
   // Physics first (the CG/CB markers use it); skipped while dragging, onUp re-renders
-  if(physPending && dragView===null){ physPending=false; if(fitWeights()) syncWeightUI(); inRender=true; calcPhysics(); inRender=false; }
+  if(physPending && dragView===null){ physPending=false; fitWeights(); syncWeightUI(); inRender=true; calcPhysics(); inRender=false; }
   renderView('side');
   renderView('top');
   // Live size of the drawn outline in each view
@@ -1038,12 +1045,20 @@ function renderView(which) {
 
   // Internal weights (draggable in the side view); the one the sliders edit is outlined when there are several
   const sideF=isSide?flattenSmooth(pts,SM,12):[];
+  let out='';
   weights.forEach((w,i)=>{
     const wp=weightPlacement(sideF,w), sz=weightShape(w), X=cx+wp.x*zoom, Y=cy+(isSide?wp.z:0)*zoom;
     const sel=dragType==='weight'?i===dragWeightIdx:weights.length>1&&i===selWeight;
     html+='<ellipse cx="'+r2(X)+'" cy="'+r2(Y)+'" rx="'+r2(sz.rx*zoom)+'" ry="'+r2(sz.ry*zoom)+'" fill="#94a3b8" fill-opacity="0.8" stroke="'+(sel?'#22d3ee':'#475569')+'" stroke-width="'+(sel?2:1)+'"'+(isSide?' style="cursor:ew-resize"':' pointer-events="none"')+'/>';
     if(weights.length>1) html+='<text x="'+r2(X)+'" y="'+r2(Y+3.5)+'" text-anchor="middle" font-family="SF Mono,Courier New,monospace" font-size="10" font-weight="700" fill="#1e293b" pointer-events="none">'+(i+1)+'</text>';
+    out+='<ellipse cx="'+r2(X)+'" cy="'+r2(Y)+'" rx="'+r2(sz.rx*zoom)+'" ry="'+r2(sz.ry*zoom)+'"/>';
   });
+  // The parts of the weights outside the outline, in orange (a mask that hides the body)
+  if(out){
+    const mid='wOut-'+(isSide?'side':'top');
+    html+='<mask id="'+mid+'" maskUnits="userSpaceOnUse"><rect x="-100000" y="-100000" width="200000" height="200000" fill="#fff"/><path d="'+smoothPath(dp,SM)+'" fill="#000"/></mask>'+
+      '<g mask="url(#'+mid+')" fill="#fb923c" fill-opacity="0.75" stroke="#ea580c" stroke-width="1" pointer-events="none">'+out+'</g>';
+  }
 
   // Center line
   html+='<line x1="'+(cx+(mnx+3)*zoom)+'" y1="'+cy+'" x2="'+(cx+(mxx-3)*zoom)+'" y2="'+cy+'" stroke="'+SC+'" stroke-width="0.7" stroke-dasharray="3,2" opacity="0.4"/>';
@@ -1554,7 +1569,8 @@ function restPitch(slices, parts, M, cg) {
 
 // Internal weight w: w.pos % of the length back from the nose, as low in the belly as it goes. The height
 // range comes from the whole length of the weight (WALL mm of material above and below), so a weight
-// rides higher where the belly rises instead of poking out of it.
+// rides higher where the belly rises instead of poking out of it. A weight too thick for the body there
+// keeps its top WALL mm under the back and sticks out of the belly.
 // side = flattened side outline (for the height); shared by physics, drawing and export.
 function weightPlacement(side, w) {
   const sx=xRange(sidePts), L=sx.mx-sx.mn;
@@ -1568,11 +1584,18 @@ function weightPlacement(side, w) {
     if(sd){ lo=Math.max(lo,sd.mn+WALL+h); hi=Math.min(hi,sd.mx-WALL-h); }
   }
   const pref=(s.mn+s.mx)/2+(s.mx-s.mn)*0.25;
-  return {x, z:lo<=hi?Math.max(lo,Math.min(hi,pref)):(lo+hi)/2};
+  return {x, z:lo<=hi?Math.max(lo,Math.min(hi,pref)):lo};
 }
-// Does weight w stay inside the body (WALL mm of material all round) in both views?
+// Weights may stick out of the outline above, below and sideways (their mass still counts as inside the
+// lure), but not past the nose or the tail: both ends stay WALL mm inside the body's length.
 const WALL=0.8;
 function weightFits(w, sideF, topF) {
+  const sx=xRange(sidePts), p=weightPlacement(sideF,w), sh=weightShape(w);
+  return p.x-sh.rx>=sx.mn+WALL && p.x+sh.rx<=sx.mx-WALL;
+}
+// Is weight w wholly inside the outline in both views (WALL mm of material all round)? Only for the
+// "sticks out" warning and the orange marking.
+function weightInside(w, sideF, topF) {
   const sx=xRange(sidePts), p=weightPlacement(sideF,w), sh=weightShape(w);
   if(p.x-sh.rx<sx.mn+WALL || p.x+sh.rx>sx.mx-WALL) return false;
   for(let k=-10;k<=10;k++){
@@ -1584,7 +1607,7 @@ function weightFits(w, sideF, topF) {
 }
 const WEIGHT_DIAS=Array.from({length:59},(_,i)=>1+i*0.5); // the diameter slider's steps (1-30 mm)
 function bodyOutlines() { return [flattenSmooth(sidePts,SM,12), flattenSmooth(topPts,SM,12)]; }
-// Diameter that fits mass g at w.pos, nearest to the one asked for (null if none)
+// Diameter that fits mass g at w.pos (nose to tail), nearest to the one asked for (null if none)
 function fitDia(w, g, sideF, topF) {
   const ok=d=>weightFits({pos:w.pos,g,d},sideF,topF), want=w.dp??w.d;
   if(ok(want)) return want;
@@ -1601,7 +1624,7 @@ function diaRange(w, sideF, topF) {
 // most that fits (unless keepMass: the caller then rejects the edit). Returns a note when it changed w.
 function fitWeight(w, keepMass, sideF, topF) {
   if(!sideF) [sideF,topF]=bodyOutlines();
-  if(weightFits(w,sideF,topF)) return ''; // already inside: its shape is left alone
+  if(weightFits(w,sideF,topF)) return ''; // already between nose and tail: its shape is left alone
   const d0=w.d, g0=w.g;
   let d=fitDia(w,w.g,sideF,topF);
   if(d===null){
@@ -1615,10 +1638,10 @@ function fitWeight(w, keepMass, sideF, topF) {
   const i=weights.indexOf(w)+1, parts=[];
   if(w.g!==g0) parts.push('무게 '+g0+'→'+w.g+' g');
   if(w.d!==d0 && w.d!==w.dp) parts.push('지름 '+(w.dp??d0)+'→'+w.d+' mm');
-  return parts.length?'웨이트 '+i+': 바디 안에 맞도록 '+parts.join(', '):'';
+  return parts.length?'웨이트 '+i+': 코끝·꼬리끝 안에 맞도록 '+parts.join(', '):'';
 }
 // Move w toward position target (%) keeping its mass and shape, and stop at the last position where it
-// still fits inside the body
+// still fits between nose and tail
 function moveWeight(w, target) {
   const [sideF,topF]=bodyOutlines(), step=Math.sign(target-w.pos);
   if(!weightFits(w,sideF,topF)){ w.pos=target; return true; } // already outside (refit on the next render)
@@ -1646,6 +1669,8 @@ function syncWeightUI() {
   document.getElementById('weightTabs').innerHTML=weights.map((x,i)=>
     '<button class="seg-btn'+(i===selWeight?' active':'')+'" style="flex:0 0 auto;min-width:44px" onclick="selectWeight('+i+')">'+(i+1)+' · '+x.g+'g</button>').join('');
   set('weightSum',weights.length?weights.length+'개 · '+weights.reduce((s,x)=>s+x.g,0).toFixed(1)+' g':'없음');
+  const [sF,tF]=bodyOutlines(), out=weights.map((x,i)=>weightInside(x,sF,tF)?0:i+1).filter(Boolean), oe=document.getElementById('weightOut');
+  oe.textContent=out.length?'● 웨이트 '+out.join(', ')+': 외곽선 밖으로 나옴 (주황 부분, 무게는 루어 내부로 계산)':''; oe.style.display=out.length?'':'none';
   document.getElementById('weightEdit').style.display=w?'':'none';
   document.getElementById('weightDelBtn').disabled=!w;
   if(!w) return;
@@ -1663,7 +1688,7 @@ function setWeightProp(k, v) {
   const old=w[k]; w[k]=v;
   if(k==='d') w.dp=v;
   // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
-  if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 바디 밖으로 나가서 '+w.pos+'%에서 멈춤'); }
+  if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>old?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤'); }
   else setWeightNote(fitWeight(w,false));
   syncWeightUI(); calcPhysics(); render(true);
 }
@@ -2000,14 +2025,30 @@ function toggleAnimGraph(btn){
   document.getElementById('animGraph').style.display=animShowGraph?'block':'none';
   if(!animRunning) drawAnimation();
 }
-// Reference run: the trajectory and numbers of the design as it is now, kept while the design is edited
+// Reference run: the trajectory and numbers of the design as it is now, kept while the design is edited.
+// It is also kept in this browser (localStorage) so it survives a reload; storage may be unavailable.
+const REF_KEY='lureDesigner.animRef';
 function animSaveRef(){
   const a=lastPhys.act;
-  animRef=Object.assign(animSimulate(a,animTech,animOpt,REF_SECS),{tech:animTech, type:a.type});
+  animRef=Object.assign(animSimulate(a,animTech,animOpt,REF_SECS),{tech:animTech, type:a.type, saved:Date.now()});
+  animStoreRef();
   updateAnimSummary();
   if(!animRunning) drawAnimation();
 }
-function animClearRef(){ animRef=null; updateAnimSummary(); if(!animRunning) drawAnimation(); }
+function animClearRef(){ animRef=null; animStoreRef(); updateAnimSummary(); if(!animRunning) drawAnimation(); }
+function animStoreRef(){
+  try{
+    if(animRef) localStorage.setItem(REF_KEY,JSON.stringify(animRef,(k,v)=>typeof v==='number'?+v.toFixed(4):v));
+    else localStorage.removeItem(REF_KEY);
+  }catch(e){}
+}
+function animLoadRef(){
+  try{
+    const r=JSON.parse(localStorage.getItem(REF_KEY));
+    if(r && Array.isArray(r.pts) && Array.isArray(r.ser) && LURE_TYPES[r.type] && TECH_NAMES[r.tech] && isFinite(r.maxD)) animRef=r;
+  }catch(e){}
+}
+animLoadRef();
 function animRefOk(){ return animRef && animRef.tech===animTech && animRef.type===lastPhys.act.type; }
 
 // Technique buttons for the detected lure type, and the description of the chosen one
@@ -2028,8 +2069,9 @@ function updateAnimSummary(){
   const c=animCur, r=animRefOk()?animRef:null;
   const row=(n,k,u)=>n+' <b>'+c[k].toFixed(2)+u+'</b>'+(r&&Math.abs(c[k]-r[k])>=0.005?' <i>('+(c[k]>r[k]?'+':'−')+Math.abs(c[k]-r[k]).toFixed(2)+')</i>':'');
   let h=REF_SECS+'초 시뮬 · '+row('최대 수심','maxD',' m')+' · '+row('평균 속도','avgV',' m/s')+' · '+row('최고 속도','peakV',' m/s');
-  if(r) h+='<br><i>주황 점선 = 저장한 기준과 비교 (괄호는 기준 대비 변화)</i>';
-  else if(animRef) h+='<br><i>저장한 기준은 '+LURE_TYPES[animRef.type].name+' · '+TECH_NAMES[animRef.tech]+' 입니다 (현재와 다른 루어·운용법)</i>';
+  const when=animRef&&animRef.saved?' · '+new Date(animRef.saved).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 저장':'';
+  if(r) h+='<br><i>주황 점선 = 저장한 기준과 비교 (괄호는 기준 대비 변화)'+when+'</i>';
+  else if(animRef) h+='<br><i>저장한 기준은 '+LURE_TYPES[animRef.type].name+' · '+TECH_NAMES[animRef.tech]+' 입니다 (현재와 다른 루어·운용법)'+when+'</i>';
   document.getElementById('animSummary').innerHTML=h;
   document.getElementById('animClearBtn').disabled=!animRef;
 }
