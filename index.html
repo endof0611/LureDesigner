@@ -268,10 +268,18 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">소재 밀도 (g/cm³)</span><span class="slider-value" id="densityVal">0.50</span></div>
         <input type="range" min="0.1" max="2.0" value="0.5" step="0.05" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
-      <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트 (g)</span><span class="slider-value" id="weightVal">5</span></div>
-        <input type="range" min="0" max="100" value="5" step="0.5" id="weightSlider" oninput="document.getElementById('weightVal').textContent=this.value;calcPhysics()"></div>
-      <div class="slider-group"><div class="slider-header"><span class="control-label">웨이트 위치 (앞↔뒤)</span><span class="slider-value" id="weightPosVal">50%</span></div>
-        <input type="range" min="10" max="90" value="50" id="weightPosSlider" oninput="document.getElementById('weightPosVal').textContent=this.value+'%';calcPhysics()"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트</span><span class="slider-value" id="weightSum">-</span></div>
+        <div class="seg" id="weightTabs" style="flex-wrap:wrap"></div>
+        <div style="display:flex;gap:4px"><button class="btn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div></div>
+      <div id="weightEdit">
+      <div class="slider-group"><div class="slider-header"><span class="control-label">무게 (g)</span><span class="slider-value" id="weightVal">5</span></div>
+        <input type="range" min="0.5" max="100" value="5" step="0.5" id="weightSlider" oninput="setWeightProp('g',+this.value)"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">위치 (앞↔뒤)</span><span class="slider-value" id="weightPosVal">50%</span></div>
+        <input type="range" min="5" max="95" value="50" id="weightPosSlider" oninput="setWeightProp('pos',+this.value)"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">지름 (mm)</span><span class="slider-value" id="weightDiaVal">-</span></div>
+        <input type="range" min="1" max="30" value="8" step="0.5" id="weightDiaSlider" oninput="setWeightProp('d',+this.value)"></div>
+      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">납 기준 · 같은 무게에서 지름↓ 길쭉(슬러그), 지름↑ 둥글게(볼) · 측면 뷰에서 드래그로 위치 이동</span></div>
+      </div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
         <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
@@ -414,6 +422,7 @@ let dragIdx = null;
 let dragType = null; // 'point' or 'part'
 let dragPartType = null; // 'eye','hook','lineEye'
 let dragPartIdx = null;
+let dragWeightIdx = null; // index into weights while one is dragged
 let layoutNoseX = null; // nose X frozen during a drag so the view doesn't shift under the pointer
 let isPan = false, panRef = {x:0,y:0}, panTarget = null;
 let isTouch = false; // true when using touch input
@@ -423,6 +432,9 @@ let eyes = [];
 let hooks = [];
 let lineEyes = [];
 let selectedPart = null; // {type, idx}
+// Internal weights (lead): pos = % of the length back from the nose, g = mass, d = diameter (mm)
+let weights = [{pos:50, g:5, d:8}];
+let selWeight = 0; // weight edited by the sidebar sliders
 
 
 // === LURE PRESETS ===
@@ -509,7 +521,7 @@ let presetViewCat='seabass';
 let presetDirty=false; // shape or lure settings changed since the preset was loaded
 
 // Sidebar controls a preset sets; they are saved in the undo history together with the shape
-const CTL_FMT={density:v=>(+v).toFixed(2), weight:v=>v, weightPos:v=>v+'%', hookWeight:v=>v,
+const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v,
   lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
@@ -591,8 +603,7 @@ function applyPreset(cat, key) {
   const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
   setCtl('hookSize',hookR);
   setCtl('density',p.density);
-  setCtl('weight',p.weight);
-  setCtl('weightPos',p.weightPos);
+  weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>({pos:w.pos, g:w.g, d:w.d||autoDia(w.g)})); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
@@ -646,7 +657,7 @@ function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).f
 
 // === HISTORY ===
 function saveH() {
-  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,c:ctlState()})));
+  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,w:weights,ws:selWeight,c:ctlState()})));
   if(undoStack.length>MAX_HIST) undoStack.shift();
   lastSaveKey=null;
   presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
@@ -661,12 +672,12 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
-  updatePartCounts(); updatePtsSliders(); syncSlidersFromPoints(); render();
+  updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
 function undoAction() {
   if(!undoStack.length)return;
   const h=undoStack.pop();
-  sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l;
+  sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; weights=h.w; selWeight=h.ws;
   const presetChanged=restoreCtl(h.c);
   afterStateReplaced();
   if(presetChanged) resetView();
@@ -734,7 +745,7 @@ function scaleLengthAll(v) {
   const prop=document.getElementById('propToggle').checked;
   if(lastSaveKey!=='len'||Date.now()-lastSaveT>800||!lenBase){
     const r=drawnRange('side').x, val=id=>parseFloat(document.getElementById(id+'Slider').value);
-    lenBase={L:r.mx-r.mn, weight:val('weight'), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
+    lenBase={L:r.mx-r.mn, weights:weights.map(w=>({...w})), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   saveHGrouped('len');
   // Same factor for both views, so their lengths stay linked; anchored at the nose (max X).
@@ -753,7 +764,8 @@ function scaleLengthAll(v) {
   if(prop){
     // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
-    setCtl('weight',half(lenBase.weight*r**3)); setCtl('hookWeight',half(lenBase.hookWeight*r**3));
+    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r))})); syncWeightUI();
+    setCtl('hookWeight',half(lenBase.hookWeight*r**3));
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
     setCtl('lipLen',Math.round(lenBase.lipLen*r));
     syncSlidersFromPoints();
@@ -1018,13 +1030,14 @@ function renderView(which) {
   const gridOn=document.getElementById('gridToggle').checked;
   html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'"'+(gridOn?' fill-opacity="0.45"':'')+' stroke="'+SC+'" stroke-width="'+SW+'"/>';
 
-  // Internal weight (draggable in the side view)
-  const wg=parseFloat(document.getElementById('weightSlider').value);
-  if(wg>0){
-    const wp=weightPlacement(isSide?flattenSmooth(pts,SM,12):[]), sz=weightSize(wg);
-    const sel=dragType==='weight';
-    html+='<ellipse cx="'+r2(cx+wp.x*zoom)+'" cy="'+r2(cy+(isSide?wp.z:0)*zoom)+'" rx="'+r2(sz.rx*zoom)+'" ry="'+r2(sz.ry*zoom)+'" fill="#94a3b8" fill-opacity="0.8" stroke="'+(sel?'#22d3ee':'#475569')+'" stroke-width="'+(sel?2:1)+'"'+(isSide?' style="cursor:ew-resize"':' pointer-events="none"')+'/>';
-  }
+  // Internal weights (draggable in the side view); the one the sliders edit is outlined when there are several
+  const sideF=isSide?flattenSmooth(pts,SM,12):[];
+  weights.forEach((w,i)=>{
+    const wp=weightPlacement(sideF,w), sz=weightShape(w), X=cx+wp.x*zoom, Y=cy+(isSide?wp.z:0)*zoom;
+    const sel=dragType==='weight'?i===dragWeightIdx:weights.length>1&&i===selWeight;
+    html+='<ellipse cx="'+r2(X)+'" cy="'+r2(Y)+'" rx="'+r2(sz.rx*zoom)+'" ry="'+r2(sz.ry*zoom)+'" fill="#94a3b8" fill-opacity="0.8" stroke="'+(sel?'#22d3ee':'#475569')+'" stroke-width="'+(sel?2:1)+'"'+(isSide?' style="cursor:ew-resize"':' pointer-events="none"')+'/>';
+    if(weights.length>1) html+='<text x="'+r2(X)+'" y="'+r2(Y+3.5)+'" text-anchor="middle" font-family="SF Mono,Courier New,monospace" font-size="10" font-weight="700" fill="#1e293b" pointer-events="none">'+(i+1)+'</text>';
+  });
 
   // Center line
   html+='<line x1="'+(cx+(mnx+3)*zoom)+'" y1="'+cy+'" x2="'+(cx+(mxx-3)*zoom)+'" y2="'+cy+'" stroke="'+SC+'" stroke-width="0.7" stroke-dasharray="3,2" opacity="0.4"/>';
@@ -1213,19 +1226,21 @@ function onDown(e,view) {
     }
     // Then check body control points
     const ci=hitPoint(pts,q,0,editableCount(n,sym));
-    const wg=parseFloat(document.getElementById('weightSlider').value);
-    let onWeight=false;
-    if(ci<0 && view==='side' && wg>0){
-      // Inside the weight ellipse, grown so small weights stay easy to grab
-      const wp=weightPlacement(flattenSmooth(sidePts,SM,12)), sz=weightSize(wg), g=hitR*0.4;
-      onWeight=((q.x-wp.x)/(sz.rx+g))**2+((q.y-wp.z)/(sz.ry+g))**2<=1;
+    let onWeight=-1;
+    if(ci<0 && view==='side'){
+      // Inside a weight ellipse, grown so small weights stay easy to grab (topmost drawn first)
+      const f=flattenSmooth(sidePts,SM,12), g=hitR*0.4;
+      for(let i=weights.length-1;i>=0&&onWeight<0;i--){
+        const wp=weightPlacement(f,weights[i]), sz=weightShape(weights[i]);
+        if(((q.x-wp.x)/(sz.rx+g))**2+((q.y-wp.z)/(sz.ry+g))**2<=1) onWeight=i;
+      }
     }
     if(ci>=0){
       saveH(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
       layoutNoseX=Math.max(xRange(sidePts).mx,xRange(topPts).mx);
       render(true);
-    } else if(onWeight){
-      saveH(); dragView=view; dragType='weight'; selectedPart=null;
+    } else if(onWeight>=0){
+      saveH(); dragView=view; dragType='weight'; dragWeightIdx=onWeight; selWeight=onWeight; selectedPart=null; syncWeightUI();
       render(true);
     } else {
       const pan=view==='side'?sidePan:topPan;
@@ -1295,10 +1310,11 @@ function onMove(e,view) {
     return;
   }
 
-  // Weight dragging: moves along the body, updating the weight-position slider (10-90%)
+  // Weight dragging: moves along the body, updating the weight-position slider (5-95%)
   if(dragView===view && dragType==='weight'){
     const sx=xRange(sidePts), L=sx.mx-sx.mn;
-    setCtl('weightPos',Math.max(10,Math.min(90,Math.round((sx.mx-q.x)/L*100))));
+    weights[dragWeightIdx].pos=Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)));
+    syncWeightUI();
     render(true);
     return;
   }
@@ -1327,7 +1343,7 @@ function onMove(e,view) {
 }
 
 function endDrag() {
-  dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
+  dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;dragWeightIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
 }
 function onUp(){
   const changed=dragIdx!==null || dragPartIdx!==null || dragType==='weight';
@@ -1354,13 +1370,13 @@ function buildLureSVG(M, sw) {
     sideExtent.push(...g.hull);
     lipEl='\n    <path d="'+g.d+'" fill="#c8dcf0" fill-opacity="0.3" stroke="'+SC+'" stroke-width="1" opacity="0.7"/>';
   }
-  const wg=parseFloat(document.getElementById('weightSlider').value);
   let wSide='', wTop='';
-  if(wg>0){
-    const wp=weightPlacement(flattenSmooth(sidePts,SM,12)), sz=weightSize(wg);
+  const sideF=flattenSmooth(sidePts,SM,12);
+  weights.forEach(w=>{
+    const wp=weightPlacement(sideF,w), sz=weightShape(w);
     const el=(y,ry)=>'\n    <ellipse class="weight" cx="'+r2(wp.x)+'" cy="'+r2(y)+'" rx="'+r2(sz.rx)+'" ry="'+r2(ry)+'" fill="none" stroke="#475569" stroke-width="0.5" stroke-dasharray="2,1"/>';
-    wSide=el(wp.z,sz.ry); wTop=el(0,sz.ry);
-  }
+    wSide+=el(wp.z,sz.ry); wTop+=el(0,sz.ry);
+  });
   const sb=bbox(sideExtent), tb=bbox(topPts);
   // One X origin for both views so nose and tail line up vertically, as in the editor
   const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+M*2), h=r2(sb.h+tb.h+GAP+M*2);
@@ -1530,16 +1546,55 @@ function restPitch(slices, parts, M, cg) {
   return {pitch:'unstable', cb:cbAt(0)};
 }
 
-// Internal weight: low in the belly, weightPos % of the length back from the nose.
+// Internal weight w: low in the belly, w.pos % of the length back from the nose. A thick weight sits
+// higher, so it stays inside the belly (never above the centre line).
 // side = flattened side outline (for the height); shared by physics, drawing and export.
-function weightPlacement(side) {
+function weightPlacement(side, w) {
   const sx=xRange(sidePts), L=sx.mx-sx.mn;
-  const x=sx.mx-L*parseInt(document.getElementById('weightPosSlider').value)/100;
+  const x=sx.mx-L*w.pos/100;
   const s=spanAt(side,x);
-  return {x, z:s?(s.mn+s.mx)/2+(s.mx-s.mn)*0.25:0};
+  if(!s) return {x, z:0};
+  const c=(s.mn+s.mx)/2;
+  return {x, z:Math.max(c,Math.min(c+(s.mx-s.mn)*0.25, s.mx-w.d/2-0.8))};
 }
-// Drawn as an ellipsoid 1.5k × k × k with the same volume as the lead
-function weightSize(g) { const k=Math.cbrt(g/LEAD*1000/(2*Math.PI)); return {rx:1.5*k, ry:k}; }
+// An ellipsoid of the lead's volume: diameter d across (height and width), length from the volume
+function weightShape(w) { const r=w.d/2; return {rx:Math.max(0.3,3*(w.g/LEAD*1000)/(4*Math.PI*r*r)), ry:r}; }
+// Default diameter of a 1.5 : 1 lead slug of mass g (to 0.5 mm)
+function autoDia(g) { return Math.max(1,Math.round(4*Math.cbrt(g/LEAD*1000/(2*Math.PI)))/2); }
+
+// Sidebar: weight tabs and the sliders of the selected weight
+function syncWeightUI() {
+  if(selWeight>=weights.length) selWeight=Math.max(0,weights.length-1);
+  const w=weights[selWeight], set=(id,t)=>document.getElementById(id).textContent=t;
+  document.getElementById('weightTabs').innerHTML=weights.map((x,i)=>
+    '<button class="seg-btn'+(i===selWeight?' active':'')+'" style="flex:0 0 auto;min-width:44px" onclick="selectWeight('+i+')">'+(i+1)+' · '+x.g+'g</button>').join('');
+  set('weightSum',weights.length?weights.length+'개 · '+weights.reduce((s,x)=>s+x.g,0).toFixed(1)+' g':'없음');
+  document.getElementById('weightEdit').style.display=w?'':'none';
+  document.getElementById('weightDelBtn').disabled=!w;
+  if(!w) return;
+  document.getElementById('weightSlider').value=w.g; set('weightVal',w.g);
+  document.getElementById('weightPosSlider').value=w.pos; set('weightPosVal',w.pos+'%');
+  document.getElementById('weightDiaSlider').value=w.d; set('weightDiaVal',w.d+' (길이 '+(weightShape(w).rx*2).toFixed(1)+')');
+}
+function selectWeight(i) { selWeight=i; syncWeightUI(); render(true); }
+// Slider edit of the selected weight: one undo step per drag
+function setWeightProp(k, v) {
+  const w=weights[selWeight]; if(!w) return;
+  saveHGrouped('w'+k+selWeight);
+  w[k]=v; syncWeightUI(); calcPhysics();
+}
+function addWeight() {
+  if(weights.length>=8) return;
+  saveH();
+  const w=weights[selWeight];
+  weights.push(w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d}:{pos:50, g:5, d:autoDia(5)});
+  selWeight=weights.length-1; syncWeightUI(); render();
+}
+function removeWeight() {
+  if(!weights.length) return;
+  saveH();
+  weights.splice(selWeight,1); syncWeightUI(); render();
+}
 
 // Cast distance (m) with quadratic air drag, assuming the same tackle for every lure:
 // launch speed grows with lure mass as the rod loads (32 m/s limit), and the line adds a fixed drag area.
@@ -1647,8 +1702,8 @@ function calcPhysics() {
   const sx=drawnRange('side').x, [L,H,W]=lureSize(); // drawn length, height, width (mm)
   if(L<1||H<1||W<1) return;
   const density=parseFloat(document.getElementById('densitySlider').value);
-  const addWeight=parseFloat(document.getElementById('weightSlider').value);
-  const weightPos=parseInt(document.getElementById('weightPosSlider').value);
+  const addWeight=weights.reduce((s,w)=>s+w.g,0);
+  const weightPos=addWeight>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/addWeight:50; // mass-weighted position
   const hookW=parseFloat(document.getElementById('hookWeightSlider').value);
   const speed=parseInt(document.getElementById('speedSlider').value);
   const lip=lipParams();
@@ -1672,7 +1727,7 @@ function calcPhysics() {
 
   // Every component: mass m (g), displaced volume v (cm³), position x/z (mm)
   const items=[{m:vol_cm3*density, v:vol_cm3, x:mxB/vBody, z:mzB/vBody}];
-  if(addWeight>0){ const w=weightPlacement(side); items.push({m:addWeight, v:addWeight/LEAD, x:w.x, z:w.z}); }
+  weights.forEach(w=>{ const p=weightPlacement(side,w); items.push({m:w.g, v:w.g/LEAD, x:p.x, z:p.z}); });
   // Treble hook + split ring on each hook eye, hanging ~5 mm below it
   hooks.forEach(h=>items.push({m:hookW, v:hookW/STEEL, x:h.x, z:h.y+5}));
   if(lip.on){
