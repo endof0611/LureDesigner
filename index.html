@@ -453,10 +453,10 @@ const PRESETS={
     // Big-game plugs keep a thick, blunt tail carrying the tail hook eye (hook station 1 = tail end)
     aji:{name:'전갱이', desc:'다이빙 펜슬 180mm', L:180,
       up:[5,13,19,21,19,15,7.5], lo:[4,10,15,17,15,12,6.5], hw:[4,8,10,10,9,7,4.5],
-      density:0.4, weight:30, weightPos:65, hooks:[0.38,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:62, hooks:[0.38,1], lineEye:'nose'},
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
-      density:0.4, weight:25, weightPos:65, hooks:[0.4,1], lineEye:'nose'},
+      density:0.4, weight:26.5, weightPos:61, hooks:[0.4,1], lineEye:'nose'},
     // Maria (Yamashita) diving pencils, defined at a 200 mm base and scaled proportionally with the length
     // slider (prop:true), so 160 / 230 mm keep the same outline. Weights scale with volume (length³).
     // Profiles are measured in the lure's own frame: the through-wire axis from line eye to tail eye.
@@ -466,7 +466,7 @@ const PRESETS={
     rapido:{name:'라피도', desc:'마리아 롤링 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.05,
       up:[8.0,11.0,14.8,17.6,19.5,20.1,19.9,18.8,16.7,14.1,10.5,3.2], lo:[6.6,9.2,12.6,15.2,16.9,17.0,15.6,13.8,12.2,11.0,9.5,7.0],
       hw:[7.2,9.5,11.0,11.6,11.6,11.6,11.4,11.0,10.4,9.5,7.9,4.9],
-      density:0.4, weight:27, weightPos:65, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
+      density:0.4, weight:28, weightPos:62, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
     // Legato: outline traced from photos of a real F190 (side + top). Unlike the Rapido the back stays high
     // and the belly rises steadily toward the tail. Pauses almost level.
     // F190 60 g → ~70 g at 200 mm.
@@ -479,21 +479,21 @@ const PRESETS={
     type1:{name:'Type1', desc:'캡틴베이트 슬림 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.07,
       up:[2.1,3.2,5.5,8.3,11.4,14.4,15.8,16.1,14.8,13,10.6,8.2,6.4,3.5], lo:[3.3,5.5,8.2,10.9,13.7,15.6,16.3,14.3,11.6,9.3,8,7.1,6.5,4.4],
       hw:[3.2,5,7.1,9.1,11.2,13,13,13,12.8,12.5,11.4,10.6,9.9,7.6],
-      density:0.4, weight:22, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:22.5, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type2: high forehead above the wire axis, belly that stays deep to the tail
     type2:{name:'Type2', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.11, noseY:-2.5,
       up:[7.5,9.4,11.5,13.7,16.4,18.9,20.4,20.4,19.1,16,11.9,7.5,4.1,0.9], lo:[2.2,4.1,6.6,9.5,12.6,15.3,15.9,15.3,13.5,12.2,11.8,11.7,11.2,8.4],
       hw:[5.1,6.9,9.1,10.7,12.8,14.7,15.2,15.1,14.2,12.9,11.2,9.4,7.6,4.6],
-      density:0.4, weight:30, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type3: the deepest of the three, with a rounded head
     type3:{name:'Type3', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.08,
       up:[5,7.9,11.5,14.6,18,20.8,21.8,21.8,20.3,17.7,14.8,11.7,8.7,5.2], lo:[4.8,7.1,9.9,12.7,15.2,16.2,15.9,14.8,13.3,11.5,10,8.7,7.4,4.5],
       hw:[4.7,6.9,9.8,12.4,14,14.9,15,14.5,13.7,12.5,11,9.6,8.2,6.2],
-      density:0.4, weight:30, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
-      // Tail weight split into three slugs that fit the tapering tail (25 g in all)
-      density:0.4, weights:[{pos:92,g:8,d:7.5},{pos:86,g:8.5,d:9},{pos:80,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
+      // Tail weight split into three slugs that fit the tapering tail (26 g in all)
+      density:0.4, weights:[{pos:87,g:8.5,d:7.5},{pos:81,g:9,d:9},{pos:75,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
   }},
   seabass:{label:'농어', items:{
     // Lipless (slant-head) minnow: no lip; the face is cut back at an angle from the forehead down to the
@@ -507,7 +507,7 @@ const PRESETS={
       density:1.05, weight:14, weightPos:38, hooks:[0.35,0.78], lineEye:'back'},
     spencil:{name:'싱킹 펜슬', desc:'슬림 싱킹 100mm', L:100,
       up:[3,6,7.5,7.5,7,5,2], lo:[3,6,7.5,7.5,7,5,2], hw:[3,5,6,6,5.5,4,1.5],
-      density:1.05, weight:10, weightPos:40, hooks:[0.4,0.78], lineEye:'nose'}
+      density:1.05, weight:11, weightPos:41, hooks:[0.4,0.78], lineEye:'nose'}
   }},
   etc:{label:'기타', items:{
     crank:{name:'크랭크베이트', desc:'배스 팻 바디 60mm', L:60,
@@ -1803,7 +1803,9 @@ function calcPhysics() {
 
   // Every component: mass m (g), displaced volume v (cm³), position x/z (mm)
   const items=[{m:vol_cm3*density, v:vol_cm3, x:mxB/vBody, z:mzB/vBody}];
-  weights.forEach(w=>{ const p=weightPlacement(side,w); items.push({m:w.g, v:w.g/LEAD, x:p.x, z:p.z}); });
+  // A weight sits inside the body: its volume is already in the body's displacement, so it adds no
+  // volume, and its net mass is the lead minus the body material it replaces
+  weights.forEach(w=>{ const p=weightPlacement(side,w); items.push({m:w.g-w.g/LEAD*density, v:0, x:p.x, z:p.z}); });
   // Treble hook + split ring on each hook eye, hanging ~5 mm below it
   hooks.forEach(h=>items.push({m:hookW, v:hookW/STEEL, x:h.x, z:h.y+5}));
   if(lip.on){
