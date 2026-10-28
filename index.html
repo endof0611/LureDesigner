@@ -284,6 +284,11 @@
       </div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
         <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">코팅·도장 무게 (g)</span><span class="slider-value" id="coatVal">0</span></div>
+        <input type="range" min="0" max="20" value="0" step="0.5" id="coatSlider" oninput="document.getElementById('coatVal').textContent=this.value;calcPhysics()"></div>
+      <div class="slider-group"><div class="slider-header"><span class="control-label">와이어·래틀 등 내부 부속 (g)</span><span class="slider-value" id="hardwareVal">0</span></div>
+        <input type="range" min="0" max="30" value="0" step="0.5" id="hardwareSlider" oninput="document.getElementById('hardwareVal').textContent=this.value;calcPhysics()"></div>
+      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">코팅은 바디 표면에 고르게 (에폭시 1.15 g/cm³, 부피만큼 부력 증가) · 부속은 바디 중심축을 따라 고르게 (바디 안이라 부피 추가 없음) · 바닷물 기준</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
         <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];calcPhysics()"></div>
       </div>
@@ -454,10 +459,10 @@ const PRESETS={
     // Big-game plugs keep a thick, blunt tail carrying the tail hook eye (hook station 1 = tail end)
     aji:{name:'전갱이', desc:'다이빙 펜슬 180mm', L:180,
       up:[5,13,19,21,19,15,7.5], lo:[4,10,15,17,15,12,6.5], hw:[4,8,10,10,9,7,4.5],
-      density:0.4, weight:31, weightPos:62, hooks:[0.38,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:63, hooks:[0.38,1], lineEye:'nose'},
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
-      density:0.4, weight:26, weightPos:61, hooks:[0.4,1], lineEye:'nose'},
+      density:0.4, weight:26.5, weightPos:62, hooks:[0.4,1], lineEye:'nose'},
     // Maria (Yamashita) diving pencils, defined at a 200 mm base and scaled proportionally with the length
     // slider (prop:true), so 160 / 230 mm keep the same outline. Weights scale with volume (length³).
     // Profiles are measured in the lure's own frame: the through-wire axis from line eye to tail eye.
@@ -467,7 +472,7 @@ const PRESETS={
     rapido:{name:'라피도', desc:'마리아 롤링 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.05,
       up:[8.0,11.0,14.8,17.6,19.5,20.1,19.9,18.8,16.7,14.1,10.5,3.2], lo:[6.6,9.2,12.6,15.2,16.9,17.0,15.6,13.8,12.2,11.0,9.5,7.0],
       hw:[7.2,9.5,11.0,11.6,11.6,11.6,11.4,11.0,10.4,9.5,7.9,4.9],
-      density:0.4, weight:28, weightPos:62, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
+      density:0.4, weight:28, weightPos:64, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
     // Legato: outline traced from photos of a real F190 (side + top). Unlike the Rapido the back stays high
     // and the belly rises steadily toward the tail. Pauses almost level.
     // F190 60 g → ~70 g at 200 mm.
@@ -480,21 +485,21 @@ const PRESETS={
     type1:{name:'Type1', desc:'캡틴베이트 슬림 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.07,
       up:[2.1,3.2,5.5,8.3,11.4,14.4,15.8,16.1,14.8,13,10.6,8.2,6.4,3.5], lo:[3.3,5.5,8.2,10.9,13.7,15.6,16.3,14.3,11.6,9.3,8,7.1,6.5,4.4],
       hw:[3.2,5,7.1,9.1,11.2,13,13,13,12.8,12.5,11.4,10.6,9.9,7.6],
-      density:0.4, weight:22.5, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:22.5, weightPos:64, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type2: high forehead above the wire axis, belly that stays deep to the tail
     type2:{name:'Type2', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.11, noseY:-2.5,
       up:[7.5,9.4,11.5,13.7,16.4,18.9,20.4,20.4,19.1,16,11.9,7.5,4.1,0.9], lo:[2.2,4.1,6.6,9.5,12.6,15.3,15.9,15.3,13.5,12.2,11.8,11.7,11.2,8.4],
       hw:[5.1,6.9,9.1,10.7,12.8,14.7,15.2,15.1,14.2,12.9,11.2,9.4,7.6,4.6],
-      density:0.4, weight:31, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:64, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type3: the deepest of the three, with a rounded head
     type3:{name:'Type3', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.08,
       up:[5,7.9,11.5,14.6,18,20.8,21.8,21.8,20.3,17.7,14.8,11.7,8.7,5.2], lo:[4.8,7.1,9.9,12.7,15.2,16.2,15.9,14.8,13.3,11.5,10,8.7,7.4,4.5],
       hw:[4.7,6.9,9.8,12.4,14,14.9,15,14.5,13.7,12.5,11,9.6,8.2,6.2],
-      density:0.4, weight:31, weightPos:62, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
+      density:0.4, weight:31, weightPos:64, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
       // Tail weight split into three slugs that fit the tapering tail (26 g in all)
-      density:0.4, weights:[{pos:87,g:8.5,d:7.5},{pos:81,g:9,d:9},{pos:75,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
+      density:0.4, weights:[{pos:89,g:8.5,d:7.5},{pos:83,g:9,d:9},{pos:77,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
   }},
   seabass:{label:'농어', items:{
     // Lipless (slant-head) minnow: no lip; the face is cut back at an angle from the forehead down to the
@@ -527,7 +532,7 @@ let presetViewCat='seabass';
 let presetDirty=false; // shape or lure settings changed since the preset was loaded
 
 // Sidebar controls a preset sets; they are saved in the undo history together with the shape
-const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v,
+const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v, coat:v=>v, hardware:v=>v,
   lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
@@ -617,6 +622,7 @@ function applyPreset(cat, key) {
     return {pos:w.pos, g:w.g, d, dp:d};
   }); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
+  setCtl('coat',p.coat||0); setCtl('hardware',p.hardware||0);
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
   document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
@@ -758,7 +764,7 @@ function scaleLengthAll(v) {
   const prop=document.getElementById('propToggle').checked;
   if(lastSaveKey!=='len'||Date.now()-lastSaveT>800||!lenBase){
     const r=drawnRange('side').x, val=id=>parseFloat(document.getElementById(id+'Slider').value);
-    lenBase={L:r.mx-r.mn, weights:weights.map(w=>({...w})), hookWeight:val('hookWeight'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
+    lenBase={L:r.mx-r.mn, weights:weights.map(w=>({...w})), hookWeight:val('hookWeight'), coat:val('coat'), hardware:val('hardware'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   saveHGrouped('len');
   // Same factor for both views, so their lengths stay linked; anchored at the nose (max X).
@@ -779,6 +785,7 @@ function scaleLengthAll(v) {
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
     weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r)), dp:Math.max(1,half(w.dp*r))})); syncWeightUI();
     setCtl('hookWeight',half(lenBase.hookWeight*r**3));
+    setCtl('coat',half(lenBase.coat*r**2)); setCtl('hardware',half(lenBase.hardware*r**3)); // coating follows the surface
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
     setCtl('lipLen',Math.round(lenBase.lipLen*r));
     syncSlidersFromPoints();
@@ -1469,7 +1476,7 @@ function dlSVG(){
 // === PHYSICS CALCULATION ===
 // Simplified model: elliptical cross-sections for the body, point masses for weight/hooks/lip.
 // Coordinates follow the side view: +x toward the nose, +z (= side-view y) downward, mm.
-const WATER=1.0, LEAD=11.3, STEEL=7.8, LIP_DENSITY=1.2, LIP_THICK=1.2; // g/cm³; lip thickness mm
+const WATER=1.025, LEAD=11.3, STEEL=7.8, LIP_DENSITY=1.2, LIP_THICK=1.2, EPOXY=1.15; // g/cm³ (sea water); lip thickness mm
 const SPEED_MS=[0,0.3,0.5,0.8,1.1,1.5]; // retrieve speed level → m/s
 
 // Rendered outline (same Bezier as smoothPath) as a dense polyline
@@ -1823,6 +1830,8 @@ function calcPhysics() {
   const addWeight=weights.reduce((s,w)=>s+w.g,0);
   const weightPos=addWeight>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/addWeight:50; // mass-weighted position
   const hookW=parseFloat(document.getElementById('hookWeightSlider').value);
+  const coat=parseFloat(document.getElementById('coatSlider').value);
+  const hardware=parseFloat(document.getElementById('hardwareSlider').value);
   const speed=parseInt(document.getElementById('speedSlider').value);
   const lip=lipParams();
 
@@ -1842,9 +1851,26 @@ function calcPhysics() {
   }
   if(vBody<=0) return;
   const vol_cm3=vBody/1000;
+  // Coating: an even epoxy shell over the body surface. It thickens every cross-section (so the floating
+  // waterline sees its volume) and its mass sits on the surface, spread by each slice's perimeter.
+  let coatV=0, coatItem=null;
+  if(coat>0){
+    const per=q=>Math.PI*(3*(q.a+q.b)-Math.sqrt((3*q.a+q.b)*(q.a+3*q.b))); // ellipse perimeter (Ramanujan)
+    const S=slices.reduce((s,q)=>s+per(q)*q.dx,0), t=coat/EPOXY*1000/S;     // shell thickness (mm)
+    let mx=0, mz=0;
+    for(const q of slices){ const w=per(q)*q.dx/S; mx+=w*q.x; mz+=w*q.zc; coatV+=Math.PI*((q.a+t)*(q.b+t)-q.a*q.b)*q.dx; q.a+=t; q.b+=t; }
+    coatItem={m:coat, v:0, x:mx, z:mz};
+  }
 
   // Every component: mass m (g), displaced volume v (cm³), position x/z (mm)
-  const items=[{m:vol_cm3*density, v:vol_cm3, x:mxB/vBody, z:mzB/vBody}];
+  const items=[{m:vol_cm3*density, v:vol_cm3+coatV/1000, x:mxB/vBody, z:mzB/vBody}];
+  if(coatItem) items.push(coatItem);
+  // Through-wire, rattles and other internal hardware: spread along the body axis, inside the body like the
+  // weights (no extra volume; the body material it replaces is taken off)
+  if(hardware>0){
+    const len=slices.reduce((s,q)=>s+q.dx,0);
+    items.push({m:hardware-hardware/STEEL*density, v:0, x:slices.reduce((s,q)=>s+q.x*q.dx,0)/len, z:slices.reduce((s,q)=>s+q.zc*q.dx,0)/len});
+  }
   // A weight sits inside the body: its volume is already in the body's displacement, so it adds no
   // volume, and its net mass is the lead minus the body material it replaces
   weights.forEach(w=>{ const p=weightPlacement(side,w); items.push({m:w.g-w.g/LEAD*density, v:0, x:p.x, z:p.z}); });
@@ -1859,7 +1885,7 @@ function calcPhysics() {
   const cg={x:items.reduce((s,i)=>s+i.m*i.x,0)/M, z:items.reduce((s,i)=>s+i.m*i.z,0)/M};
   const totalWeight=M;
 
-  // Buoyancy (fresh water)
+  // Buoyancy (sea water)
   const buoyancyRatio=M/(V*WATER);
   let buoyancyState, buoyancyColor, buoyClass;
   if(buoyancyRatio<0.95){buoyancyState='플로팅(F)';buoyancyColor='#10b981';buoyClass='F';}
@@ -1887,8 +1913,12 @@ function calcPhysics() {
     if(pitch!==null) depth*=1+Math.max(-20,Math.min(20,pitch))*0.01; // nose-down helps the lip bite
     depth=Math.max(0,Math.min(depth,8));
   }
-  // Sink / rise rate: net weight or buoyancy balanced by broadside drag (Cd≈1 on the top-view area)
-  const freeV=Math.sqrt(2*Math.abs(M-V*WATER)/1000*9.81/(1000*polyArea(top)*1e-6));
+  // Sink / rise rate: net weight or buoyancy against drag in the rest posture. Level, the lure falls
+  // broadside (Cd≈1 on the top-view area); tilted, the broadside area shrinks with cos θ and the end-on
+  // cross-section (Cd≈0.3, streamlined) takes over with sin θ, so a tilted lure sinks or rises faster.
+  const th=(pitch===null?0:pitch)*Math.PI/180;
+  const CdA=(1.0*polyArea(top)*Math.abs(Math.cos(th))+0.3*aMax*Math.abs(Math.sin(th)))*1e-6; // m²
+  const freeV=Math.sqrt(2*Math.abs(M-V*WATER)/1000*9.81/(1000*WATER*CdA));
   const sinkRate=buoyClass==='S'?freeV:0, riseRate=buoyClass==='F'?freeV:0;
 
   // Wobble amplitude from H/L; frequency ~ speed / body height (Strouhal-like, St≈0.2)
