@@ -456,7 +456,7 @@ const PRESETS={
       density:0.4, weight:31, weightPos:62, hooks:[0.38,1], lineEye:'nose'},
     flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
-      density:0.4, weight:26.5, weightPos:61, hooks:[0.4,1], lineEye:'nose'},
+      density:0.4, weight:26, weightPos:61, hooks:[0.4,1], lineEye:'nose'},
     // Maria (Yamashita) diving pencils, defined at a 200 mm base and scaled proportionally with the length
     // slider (prop:true), so 160 / 230 mm keep the same outline. Weights scale with volume (length³).
     // Profiles are measured in the lure's own frame: the through-wire axis from line eye to tail eye.
@@ -1552,16 +1552,23 @@ function restPitch(slices, parts, M, cg) {
   return {pitch:'unstable', cb:cbAt(0)};
 }
 
-// Internal weight w: low in the belly, w.pos % of the length back from the nose. A thick weight sits
-// higher, so it stays inside the belly (never above the centre line).
+// Internal weight w: w.pos % of the length back from the nose, as low in the belly as it goes. The height
+// range comes from the whole length of the weight (WALL mm of material above and below), so a weight
+// rides higher where the belly rises instead of poking out of it.
 // side = flattened side outline (for the height); shared by physics, drawing and export.
 function weightPlacement(side, w) {
   const sx=xRange(sidePts), L=sx.mx-sx.mn;
   const x=sx.mx-L*w.pos/100;
   const s=spanAt(side,x);
   if(!s) return {x, z:0};
-  const c=(s.mn+s.mx)/2;
-  return {x, z:Math.max(c,Math.min(c+(s.mx-s.mn)*0.25, s.mx-w.d/2-WALL))};
+  const sh=weightShape(w);
+  let lo=-Infinity, hi=Infinity;
+  for(let k=-10;k<=10;k++){
+    const u=k/10, h=sh.ry*Math.sqrt(1-u*u), sd=spanAt(side,x+u*sh.rx);
+    if(sd){ lo=Math.max(lo,sd.mn+WALL+h); hi=Math.min(hi,sd.mx-WALL-h); }
+  }
+  const pref=(s.mn+s.mx)/2+(s.mx-s.mn)*0.25;
+  return {x, z:lo<=hi?Math.max(lo,Math.min(hi,pref)):(lo+hi)/2};
 }
 // Does weight w stay inside the body (WALL mm of material all round) in both views?
 const WALL=0.8;
@@ -1594,6 +1601,7 @@ function diaRange(w, sideF, topF) {
 // most that fits (unless keepMass: the caller then rejects the edit). Returns a note when it changed w.
 function fitWeight(w, keepMass, sideF, topF) {
   if(!sideF) [sideF,topF]=bodyOutlines();
+  if(weightFits(w,sideF,topF)) return ''; // already inside: its shape is left alone
   const d0=w.d, g0=w.g;
   let d=fitDia(w,w.g,sideF,topF);
   if(d===null){
@@ -1609,13 +1617,14 @@ function fitWeight(w, keepMass, sideF, topF) {
   if(w.d!==d0 && w.d!==w.dp) parts.push('지름 '+(w.dp??d0)+'→'+w.d+' mm');
   return parts.length?'웨이트 '+i+': 바디 안에 맞도록 '+parts.join(', '):'';
 }
-// Move w toward position target (%) and stop at the last position where it still fits inside the body
+// Move w toward position target (%) keeping its mass and shape, and stop at the last position where it
+// still fits inside the body
 function moveWeight(w, target) {
   const [sideF,topF]=bodyOutlines(), step=Math.sign(target-w.pos);
+  if(!weightFits(w,sideF,topF)){ w.pos=target; return true; } // already outside (refit on the next render)
   while(w.pos!==target){
-    const prev={pos:w.pos, d:w.d};
     w.pos+=step;
-    if(fitWeight(w,true,sideF,topF)===false){ Object.assign(w,prev); return false; }
+    if(!weightFits(w,sideF,topF)){ w.pos-=step; return false; }
   }
   return true;
 }
@@ -1663,7 +1672,15 @@ function addWeight() {
   saveH();
   const w=weights[selWeight];
   const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d, dp:w.dp}:{pos:50, g:5, d:autoDia(5), dp:autoDia(5)};
-  weights.push(nw); setWeightNote(fitWeight(nw,false));
+  // Same shape as the copied weight: at the nearest position to the target where it fits
+  const [sideF,topF]=bodyOutlines(), want=nw.pos;
+  for(let k=0;k<=90;k++){
+    const q=want+(k%2?1:-1)*Math.ceil(k/2);
+    if(q<5||q>95) continue;
+    nw.pos=q; if(weightFits(nw,sideF,topF)) break;
+    nw.pos=want;
+  }
+  weights.push(nw); setWeightNote(fitWeight(nw,false,sideF,topF));
   selWeight=weights.length-1; syncWeightUI(); render();
 }
 function removeWeight() {
