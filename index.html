@@ -270,7 +270,8 @@
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트</span><span class="slider-value" id="weightSum">-</span></div>
         <div class="seg" id="weightTabs" style="flex-wrap:wrap"></div>
-        <div style="display:flex;gap:4px"><button class="btn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div></div>
+        <div style="display:flex;gap:4px"><button class="btn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div>
+        <div id="weightNote" style="font-size:10px;color:#f59e0b;line-height:1.4;margin-top:6px;display:none"></div></div>
       <div id="weightEdit">
       <div class="slider-group"><div class="slider-header"><span class="control-label">무게 (g)</span><span class="slider-value" id="weightVal">5</span></div>
         <input type="range" min="0.5" max="100" value="5" step="0.5" id="weightSlider" oninput="setWeightProp('g',+this.value)"></div>
@@ -278,7 +279,7 @@
         <input type="range" min="5" max="95" value="50" id="weightPosSlider" oninput="setWeightProp('pos',+this.value)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">지름 (mm)</span><span class="slider-value" id="weightDiaVal">-</span></div>
         <input type="range" min="1" max="30" value="8" step="0.5" id="weightDiaSlider" oninput="setWeightProp('d',+this.value)"></div>
-      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">납 기준 · 같은 무게에서 지름↓ 길쭉(슬러그), 지름↑ 둥글게(볼) · 측면 뷰에서 드래그로 위치 이동</span></div>
+      <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">납 기준 · 같은 무게에서 지름↓ 길쭉(슬러그), 지름↑ 둥글게(볼) · 바디 밖으로 나가지 않도록 자동 제한 · 측면 뷰에서 드래그로 위치 이동</span></div>
       </div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
         <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
@@ -432,8 +433,11 @@ let eyes = [];
 let hooks = [];
 let lineEyes = [];
 let selectedPart = null; // {type, idx}
-// Internal weights (lead): pos = % of the length back from the nose, g = mass, d = diameter (mm)
-let weights = [{pos:50, g:5, d:8}];
+// Internal weights (lead): pos = % of the length back from the nose, g = mass, d = diameter (mm),
+// dp = the diameter asked for. They are kept inside the body (fitWeight): d is the fitting diameter
+// nearest to dp, so a weight thinned in a narrow spot grows back where there is room again.
+// Presets give weight/weightPos or a weights list.
+let weights = [{pos:50, g:5, d:8, dp:8}];
 let selWeight = 0; // weight edited by the sidebar sliders
 
 
@@ -488,7 +492,8 @@ const PRESETS={
       density:0.4, weight:30, weightPos:65, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
-      density:0.4, weight:25, weightPos:85, hooks:[0.4,1], lineEye:'chin'}
+      // Tail weight split into three slugs that fit the tapering tail (25 g in all)
+      density:0.4, weights:[{pos:92,g:8,d:7.5},{pos:86,g:8.5,d:9},{pos:80,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
   }},
   seabass:{label:'농어', items:{
     // Lipless (slant-head) minnow: no lip; the face is cut back at an angle from the forehead down to the
@@ -510,7 +515,7 @@ const PRESETS={
       lip:{len:16,ang:40}, density:0.5, weight:3, weightPos:35, hooks:[0.42,0.8], lineEye:'nose'},
     walker:{name:'톱워터 펜슬', desc:'워킹 베이트 110mm', L:110,
       up:[3,6,8,8,7.5,6,3], lo:[3,6,8,8,7.5,6,3], hw:[3,6,8,8,7.5,6,3],
-      density:0.4, weight:6, weightPos:85, hooks:[0.4,0.8], lineEye:'nose'},
+      density:0.4, weights:[{pos:72,g:6,d:11.5}], hooks:[0.4,0.8], lineEye:'nose'},
     jerk:{name:'저크베이트', desc:'서스펜드 100mm', L:100,
       up:[4,9,11,11,9,6,2], lo:[4,9,11,11,9,6,2], hw:[3,4.5,5.5,5.5,5,3.5,1.5],
       lip:{len:12,ang:25}, density:0.6, weight:2.5, weightPos:28, hooks:[0.38,0.75], lineEye:'nose'}
@@ -603,7 +608,7 @@ function applyPreset(cat, key) {
   const hookR=Math.max(1,Math.min(6,Math.round(p.L/40*2)/2)); // ~3 mm on a 125 mm lure
   setCtl('hookSize',hookR);
   setCtl('density',p.density);
-  weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>({pos:w.pos, g:w.g, d:w.d||autoDia(w.g)})); selWeight=0;
+  weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>{ const d=w.d||autoDia(w.g); return {pos:w.pos, g:w.g, d, dp:d}; }); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
@@ -672,6 +677,7 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
+  setWeightNote('');
   updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
 function undoAction() {
@@ -764,7 +770,7 @@ function scaleLengthAll(v) {
   if(prop){
     // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
-    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r))})); syncWeightUI();
+    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r)), dp:Math.max(1,half(w.dp*r))})); syncWeightUI();
     setCtl('hookWeight',half(lenBase.hookWeight*r**3));
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
     setCtl('lipLen',Math.round(lenBase.lipLen*r));
@@ -969,7 +975,7 @@ function doRender() {
   renderPending=false;
   applySym();
   // Physics first (the CG/CB markers use it); skipped while dragging, onUp re-renders
-  if(physPending && dragView===null){ physPending=false; inRender=true; calcPhysics(); inRender=false; }
+  if(physPending && dragView===null){ physPending=false; if(fitWeights()) syncWeightUI(); inRender=true; calcPhysics(); inRender=false; }
   renderView('side');
   renderView('top');
   // Live size of the drawn outline in each view
@@ -1313,7 +1319,7 @@ function onMove(e,view) {
   // Weight dragging: moves along the body, updating the weight-position slider (5-95%)
   if(dragView===view && dragType==='weight'){
     const sx=xRange(sidePts), L=sx.mx-sx.mn;
-    weights[dragWeightIdx].pos=Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)));
+    moveWeight(weights[dragWeightIdx],Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)))); // stops where it would stick out
     syncWeightUI();
     render(true);
     return;
@@ -1555,8 +1561,70 @@ function weightPlacement(side, w) {
   const s=spanAt(side,x);
   if(!s) return {x, z:0};
   const c=(s.mn+s.mx)/2;
-  return {x, z:Math.max(c,Math.min(c+(s.mx-s.mn)*0.25, s.mx-w.d/2-0.8))};
+  return {x, z:Math.max(c,Math.min(c+(s.mx-s.mn)*0.25, s.mx-w.d/2-WALL))};
 }
+// Does weight w stay inside the body (WALL mm of material all round) in both views?
+const WALL=0.8;
+function weightFits(w, sideF, topF) {
+  const sx=xRange(sidePts), p=weightPlacement(sideF,w), sh=weightShape(w);
+  if(p.x-sh.rx<sx.mn+WALL || p.x+sh.rx>sx.mx-WALL) return false;
+  for(let k=-10;k<=10;k++){
+    const u=k/10, x=p.x+u*sh.rx, h=sh.ry*Math.sqrt(1-u*u), sd=spanAt(sideF,x), tp=spanAt(topF,x);
+    if(!sd||!tp) return false;
+    if(p.z-h<sd.mn+WALL || p.z+h>sd.mx-WALL || -h<tp.mn+WALL || h>tp.mx-WALL) return false;
+  }
+  return true;
+}
+const WEIGHT_DIAS=Array.from({length:59},(_,i)=>1+i*0.5); // the diameter slider's steps (1-30 mm)
+function bodyOutlines() { return [flattenSmooth(sidePts,SM,12), flattenSmooth(topPts,SM,12)]; }
+// Diameter that fits mass g at w.pos, nearest to the one asked for (null if none)
+function fitDia(w, g, sideF, topF) {
+  const ok=d=>weightFits({pos:w.pos,g,d},sideF,topF), want=w.dp??w.d;
+  if(ok(want)) return want;
+  const by=WEIGHT_DIAS.slice().sort((a,b)=>Math.abs(a-want)-Math.abs(b-want));
+  for(const d of by) if(ok(d)) return d;
+  return null;
+}
+// Smallest and largest diameter that fit mass g at w.pos
+function diaRange(w, sideF, topF) {
+  const f=WEIGHT_DIAS.filter(d=>weightFits({pos:w.pos,g:w.g,d},sideF,topF));
+  return f.length?{mn:f[0],mx:f[f.length-1]}:null;
+}
+// Fit weight w inside the body: the diameter moves first; if no diameter fits, the mass drops to the
+// most that fits (unless keepMass: the caller then rejects the edit). Returns a note when it changed w.
+function fitWeight(w, keepMass, sideF, topF) {
+  if(!sideF) [sideF,topF]=bodyOutlines();
+  const d0=w.d, g0=w.g;
+  let d=fitDia(w,w.g,sideF,topF);
+  if(d===null){
+    if(keepMass) return false;
+    // Largest fitting mass in 0.5 g steps (bisection: a lighter weight always fits at least as well)
+    let lo=0, hi=Math.round(w.g*2)-1;
+    while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2,sideF,topF)!==null) lo=m; else hi=m-1; }
+    w.g=Math.max(0.5,lo/2); d=fitDia(w,w.g,sideF,topF)??1;
+  }
+  w.d=d;
+  const i=weights.indexOf(w)+1, parts=[];
+  if(w.g!==g0) parts.push('무게 '+g0+'→'+w.g+' g');
+  if(w.d!==d0 && w.d!==w.dp) parts.push('지름 '+(w.dp??d0)+'→'+w.d+' mm');
+  return parts.length?'웨이트 '+i+': 바디 안에 맞도록 '+parts.join(', '):'';
+}
+// Move w toward position target (%) and stop at the last position where it still fits inside the body
+function moveWeight(w, target) {
+  const [sideF,topF]=bodyOutlines(), step=Math.sign(target-w.pos);
+  while(w.pos!==target){
+    const prev={pos:w.pos, d:w.d};
+    w.pos+=step;
+    if(fitWeight(w,true,sideF,topF)===false){ Object.assign(w,prev); return false; }
+  }
+  return true;
+}
+function fitWeights() {
+  const [sideF,topF]=bodyOutlines(), notes=weights.map(w=>fitWeight(w,false,sideF,topF)).filter(Boolean);
+  if(notes.length) setWeightNote(notes.join(' · '));
+  return notes.length>0;
+}
+function setWeightNote(t) { const n=document.getElementById('weightNote'); n.textContent=t?'⚠ '+t:''; n.style.display=t?'':'none'; }
 // An ellipsoid of the lead's volume: diameter d across (height and width), length from the volume
 function weightShape(w) { const r=w.d/2; return {rx:Math.max(0.3,3*(w.g/LEAD*1000)/(4*Math.PI*r*r)), ry:r}; }
 // Default diameter of a 1.5 : 1 lead slug of mass g (to 0.5 mm)
@@ -1574,20 +1642,28 @@ function syncWeightUI() {
   if(!w) return;
   document.getElementById('weightSlider').value=w.g; set('weightVal',w.g);
   document.getElementById('weightPosSlider').value=w.pos; set('weightPosVal',w.pos+'%');
-  document.getElementById('weightDiaSlider').value=w.d; set('weightDiaVal',w.d+' (길이 '+(weightShape(w).rx*2).toFixed(1)+')');
+  const [sideF,topF]=bodyOutlines(), rg=diaRange(w,sideF,topF);
+  document.getElementById('weightDiaSlider').value=w.d;
+  set('weightDiaVal',w.d+' (길이 '+(weightShape(w).rx*2).toFixed(1)+')'+(rg?' · 가능 '+rg.mn+'~'+rg.mx:''));
 }
 function selectWeight(i) { selWeight=i; syncWeightUI(); render(true); }
 // Slider edit of the selected weight: one undo step per drag
 function setWeightProp(k, v) {
   const w=weights[selWeight]; if(!w) return;
   saveHGrouped('w'+k+selWeight);
-  w[k]=v; syncWeightUI(); calcPhysics();
+  const old=w[k]; w[k]=v;
+  if(k==='d') w.dp=v;
+  // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
+  if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 바디 밖으로 나가서 '+w.pos+'%에서 멈춤'); }
+  else setWeightNote(fitWeight(w,false));
+  syncWeightUI(); calcPhysics(); render(true);
 }
 function addWeight() {
   if(weights.length>=8) return;
   saveH();
   const w=weights[selWeight];
-  weights.push(w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d}:{pos:50, g:5, d:autoDia(5)});
+  const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d, dp:w.dp}:{pos:50, g:5, d:autoDia(5), dp:autoDia(5)};
+  weights.push(nw); setWeightNote(fitWeight(nw,false));
   selWeight=weights.length-1; syncWeightUI(); render();
 }
 function removeWeight() {
