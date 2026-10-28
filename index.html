@@ -1519,8 +1519,9 @@ function ellipseSeg(t) {
 // Rest pitch (deg, + = nose down): the posture where the centre of gravity sits straight below the
 // centre of buoyancy. For a floating lure the waterline is solved at each pitch so that the submerged
 // part carries the weight. slices: body cross-sections; parts: small items, always counted as submerged.
-// Returns {pitch, cb}: pitch is a number, 'neutral' (no restoring moment) or 'unstable' (would capsize);
-// cb is the centre of buoyancy of the submerged part at that pitch.
+// Returns {pitch, cb, gm}: pitch is a number, 'neutral' (no restoring moment) or 'unstable' (would capsize);
+// cb is the centre of buoyancy of the submerged part at that pitch; gm is the roll (sideways) metacentric
+// height in mm at that pitch: > 0 rights itself, ≤ 0 rolls over.
 function restPitch(slices, parts, M, cg) {
   const pv=parts.reduce((s,i)=>s+i.v*1000,0); // mm³
   const pvx=parts.reduce((s,i)=>s+i.v*1000*i.x,0), pvz=parts.reduce((s,i)=>s+i.v*1000*i.z,0);
@@ -1536,18 +1537,32 @@ function restPitch(slices, parts, M, cg) {
     }
     return {v,mx,mz};
   };
+  // Waterline c at pitch th (null when fully submerged)
+  const waterline=(sn,cs)=>{
+    if(target>=fullV) return null;
+    let lo=Infinity, hi=-Infinity;
+    for(const q of slices){ lo=Math.min(lo,q.x*sn+(q.zc-q.b)*cs); hi=Math.max(hi,q.x*sn+(q.zc+q.b)*cs); }
+    for(let i=0;i<28;i++){ const c=(lo+hi)/2; if(submerged(sn,cs,c).v>target) lo=c; else hi=c; }
+    return (lo+hi)/2;
+  };
   // Centre of buoyancy at pitch th (waterline solved for floating lures)
   const cbAt=th=>{
-    const sn=Math.sin(th), cs=Math.cos(th);
-    let r;
-    if(target>=fullV) r=submerged(sn,cs,-1e9);
-    else {
-      let lo=Infinity, hi=-Infinity;
-      for(const q of slices){ lo=Math.min(lo,q.x*sn+(q.zc-q.b)*cs); hi=Math.max(hi,q.x*sn+(q.zc+q.b)*cs); }
-      for(let i=0;i<28;i++){ const c=(lo+hi)/2; if(submerged(sn,cs,c).v>target) lo=c; else hi=c; }
-      r=submerged(sn,cs,(lo+hi)/2);
-    }
+    const sn=Math.sin(th), cs=Math.cos(th), c=waterline(sn,cs);
+    const r=submerged(sn,cs,c===null?-1e9:c);
     return {x:r.mx/r.v, z:r.mz/r.v};
+  };
+  // Roll stability at pitch th: GM = BG + BM. BG = height of the centre of buoyancy above the centre of
+  // gravity; BM = I/V, the waterplane's second moment about the roll axis over the displaced volume (only
+  // when floating: a submerged lure rights itself by BG alone).
+  const rollGM=th=>{
+    const sn=Math.sin(th), cs=Math.cos(th), c=waterline(sn,cs), b=cbAt(th);
+    const down=p=>p.x*sn+p.z*cs;                       // depth along the world vertical (body coordinates)
+    let I=0;
+    if(c!==null) for(const q of slices){
+      const t=((c-q.x*sn)/cs-q.zc)/q.b;
+      if(Math.abs(t)<1){ const y=q.a*Math.sqrt(1-t*t); I+=(2/3)*y*y*y*q.dx/Math.abs(cs); } // strip along the waterplane
+    }
+    return down(cg)-down(b)+(c===null?0:I/target);
   };
   // Horizontal offset of CB ahead of CG at pitch th; > 0 lifts the nose (pitch decreases)
   const torque=th=>{
@@ -1557,7 +1572,7 @@ function restPitch(slices, parts, M, cg) {
   const lim=85*Math.PI/180, steps=40;
   const ths=[], fs=[];
   for(let i=0;i<=steps;i++){ const th=-lim+2*lim*i/steps; ths.push(th); fs.push(torque(th)); }
-  if(Math.max(...fs.map(Math.abs))<0.05) return {pitch:'neutral', cb:cbAt(0)};
+  if(Math.max(...fs.map(Math.abs))<0.05) return {pitch:'neutral', cb:cbAt(0), gm:rollGM(0)};
   // Stable equilibria: torque rises through zero
   let best=null;
   for(let i=0;i<steps;i++){
@@ -1568,10 +1583,10 @@ function restPitch(slices, parts, M, cg) {
       if(best===null||Math.abs(th)<Math.abs(best)) best=th;
     }
   }
-  if(best!==null) return {pitch:best*180/Math.PI, cb:cbAt(best)};
-  if(fs.every(f=>f>0)) return {pitch:-90, cb:cbAt(-lim)}; // hangs tail-down
-  if(fs.every(f=>f<0)) return {pitch:90, cb:cbAt(lim)};   // hangs nose-down
-  return {pitch:'unstable', cb:cbAt(0)};
+  if(best!==null) return {pitch:best*180/Math.PI, cb:cbAt(best), gm:rollGM(best)};
+  if(fs.every(f=>f>0)) return {pitch:-90, cb:cbAt(-lim), gm:rollGM(-lim)}; // hangs tail-down
+  if(fs.every(f=>f<0)) return {pitch:90, cb:cbAt(lim), gm:rollGM(lim)};   // hangs nose-down
+  return {pitch:'unstable', cb:cbAt(0), gm:rollGM(0)};
 }
 
 // Internal weight w: w.pos % of the length back from the nose, as low in the belly as it goes. The height
@@ -1765,18 +1780,23 @@ function classifyLure(lipOn, buoyClass, pitch, L, H) {
   return p<-12||L>=150?'divingPencil':'liplessMinnow';
 }
 function actionParams(o) {
-  const {type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,mass,vol,area,arm}=o;
+  const {type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,mass,vol,area,arm,topArea,gm}=o;
   const rodV=SPEED_MS[speed], rest=pitch===null?0:pitch, hl=H/L, wh=W/H;
   // Inertia and drag for the preview: the lure plus the water it drags along (added mass ≈ half its displaced
   // water) against quadratic drag. Heavy, slim lures accelerate slowly and glide on; light, blunt ones stop fast.
   const meff=(mass+0.5*vol*WATER)/1000;                                   // kg
   const dragK=0.5*1000*(lip.on?1.0:0.8)*area*1e-6/meff;                   // 1/m: dv/dt = -dragK·v²
+  // Vertical motion meets the broad top-view area (Cd≈1) and drags about its own volume of water along:
+  // dv/dt = vK·(v_free·|v_free| − v·|v|), so a lure coasting down after a jerk stops within a few cm
+  const vK=0.5*1000*WATER*topArea*1e-6/((mass+vol*WATER)/1000);           // 1/m
+  // Roll amplitude in the preview: a low roll GM (relative to the body height) rolls more, a high one less
+  const rollK=Math.max(0.6,Math.min(1.6,Math.sqrt(0.08*H/Math.max(gm,0.02*H))));
   // Rest-posture restoring spring: ω² = g·|CG–CB| / (L²/12), the pitch oscillation after a jerk or a pull
   const pitchW=Math.max(3,Math.min(14,Math.sqrt(9.81*Math.max(arm,2)/1000/((L/1000)*(L/1000)/12))));
   const a={type, rodV, restPitch:rest, swimPitch:rest*0.2, divePitch:18, wobHz:wobbleHz, yawAmp:4, rollAmp:10,
     dartYaw:25, diveRate:1.0, maxDepth:3, bottom:2, surface:false, startDepth:0,
     freeRate:buoyClass==='S'?sinkRate:buoyClass==='F'?-riseRate:0, sinkRate, riseRate,
-    dragK, pullRate:8*Math.max(0.5,Math.min(1.5,Math.sqrt(0.0225/meff))), pitchW};
+    dragK, pullRate:8*Math.max(0.5,Math.min(1.5,Math.sqrt(0.0225/meff))), pitchW, vK};
   const sinking=Math.max(0.3,Math.min(2.5,sinkRate*2/rodV)); // a sinking lure settles deeper at slow speed
   if(type==='crank'){ Object.assign(a,{runDepth:depth, yawAmp:6+30*hl, rollAmp:8+6*wh, swimPitch:rest*0.2+10}); a.twitchDepth=depth; }
   else if(type==='minnow'||type==='jerkbait'){
@@ -1795,6 +1815,7 @@ function actionParams(o) {
     a.diveDepth=Math.max(0.15,Math.min(1.5,(0.2+0.8*tilt)*Math.sqrt(L/200)*(0.7+0.3*buoyancyRatio)*(0.7+0.3*rodV/0.8)));
     Object.assign(a,{runDepth:0.15, swimPitch:rest*0.25, wobHz:1.5, yawAmp:3, rollAmp:wh>0.8?35:25, dartYaw:wh>0.8?20:30, diveRate:1.2, twitchDepth:0.3});
   }
+  a.rollAmp*=rollK;
   if(a.diveDepth===undefined) a.diveDepth=a.twitchDepth!==undefined?a.twitchDepth:a.runDepth;
   if(a.twitchDepth===undefined) a.twitchDepth=a.runDepth;
   return a;
@@ -1926,7 +1947,7 @@ function calcPhysics() {
   const wobbleHz=0.2*SPEED_MS[speed]/(H/1000);
   const type=classifyLure(lip.on,buoyClass,pitch,L,H);
   const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,
-    mass:M, vol:V, area:aMax, arm:Math.hypot(cg.x-rp.cb.x, cg.z-rp.cb.z)});
+    mass:M, vol:V, area:aMax, arm:Math.hypot(cg.x-rp.cb.x, cg.z-rp.cb.z), topArea:polyArea(top), gm:rp.gm});
   const lt=LURE_TYPES[type];
   let depthText;
   if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
@@ -1945,6 +1966,8 @@ function calcPhysics() {
   if(whRatio>0.8) rollType='강한 롤링';
   else if(whRatio>0.5) rollType='롤링+워블';
   else rollType='워블 위주';
+  // Roll stability from the roll metacentric height GM (relative to the body height)
+  const gmR=rp.gm/H, rollStab=rp.gm<=0?'⚠ 뒤집힘':gmR<0.04?'복원 약함':gmR<0.15?'복원 보통':'복원 강함';
 
   // Casting: the heavy end leads in flight. CG toward the tail → flies tail-first and stable (low Cd);
   // CG toward the nose → lip and tail catch air and the lure tumbles.
@@ -1956,6 +1979,7 @@ function calcPhysics() {
   // Comment follows the computed rest posture, plus the weight's effect on casting
   let comment;
   if(rp.pitch==='unstable') comment='⚠ 무게중심이 부력중심보다 높아 뒤집힐 수 있음. ';
+  else if(rp.gm<=0) comment='⚠ 옆으로 뒤집힘: 롤 복원력이 없음(GM ≤ 0) → 웨이트를 아래로, 또는 폭을 넓게. ';
   else if(rp.pitch==='neutral') comment='💡 복원력이 없어 정지 자세가 정해지지 않음. ';
   else if(pitch>10) comment='💡 머리 숙인 정지 자세 → '+(lip.on?'립이 빨리 물어 빠른 잠행. ':'노즈다이브 경향. ');
   else if(pitch<-10) comment='💡 꼬리 숙인 정지 자세 (펜슬·포퍼형). ';
@@ -1982,7 +2006,8 @@ function calcPhysics() {
   // Lip and lipless wobblers swim by themselves; pencils and topwater lures act when worked
   set('phWobbleW',{divingPencil:'롤링·다팅 (워블 거의 없음)', topPencil:'도그워크 (수면)', popper:'팝·스플래시 (수면)',
     sinkingPencil:'S자 슬라이드 + 롤링', vibe:'고속 진동 · 약 '+act.wobHz.toFixed(0)+' Hz'}[type]||wobbleType+' · '+wobbleWidth+' · 약 '+wobbleHz.toFixed(1)+' Hz');
-  set('phRoll',rollType);
+  set('phRoll',rollType+' · '+rollStab+' (GM '+rp.gm.toFixed(1)+' mm)');
+  document.getElementById('phRoll').style.color=rp.gm<=0?'#f43f5e':'var(--accent)';
   set('phCast',castDist+' (약 '+castM.toFixed(0)+' m)');
   set('phComment',comment);
 
@@ -2215,8 +2240,19 @@ function animStep(s,a,tech,dt,opt){
   s.x+=s.v*dt;
   // Depth: driven toward the target depth by the lip / dive, or on slack line relaxing to the free sink/rise rate
   const d0=s.d;
-  if(slack){ s.vd+=(a.freeRate-s.vd)*Math.min(1,dt*3); s.d+=s.vd*dt; }
-  else { const dd=dT-s.d; s.d+=Math.sign(dd)*Math.min(Math.abs(dd),dRate*dt*Math.min(1.5,Math.max(0.3,s.v/Math.max(a.rodV,0.05)))); }
+  if(slack){
+    // Quadratic drag toward the free sink/rise rate (never past it in one step)
+    const f=a.freeRate, nv=s.vd+a.vK*(f*Math.abs(f)-s.vd*Math.abs(s.vd))*dt;
+    s.vd=(nv-f)*(s.vd-f)<0?f:nv; s.d+=s.vd*dt;
+  }
+  else {
+    const dd=dT-s.d;
+    let rate=dRate*Math.min(1.5,Math.max(0.3,s.v/Math.max(a.rodV,0.05)));
+    // Diving: no faster than the lure can coast to a stop within the depth left once the line goes slack,
+    // so the dive ends at the target depth instead of overshooting it (stop distance ln(1+v²/c)/(2·vK))
+    if(dd>0) rate=Math.min(rate,Math.sqrt(Math.max(a.freeRate*a.freeRate,0.0025)*(Math.exp(2*a.vK*dd)-1)));
+    s.d+=Math.sign(dd)*Math.min(Math.abs(dd),rate*dt);
+  }
   s.d=a.surface||tech==='walk'||tech==='pop'?0:Math.max(0,Math.min(a.maxDepth,s.d));
   if(slack){ if((s.d<=0&&s.vd<0)||(s.d>=a.maxDepth&&s.vd>0)) s.vd=0; }
   else s.vd=(s.d-d0)/dt;
