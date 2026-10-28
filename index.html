@@ -113,6 +113,33 @@
     .btn{padding:5px 10px;font-size:11px}
   }
 
+
+  /* Action preview dialog */
+  .anim-dlg{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;width:90vw;max-width:700px;max-height:94vh;overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
+  .anim-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .anim-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .anim-lbl{font-size:11px;color:var(--text-dim)}
+  .anim-canvas{width:100%;flex-shrink:0;background:#0c1829;border-radius:8px;border:1px solid var(--border);touch-action:manipulation}
+  .anim-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+  .anim-stat{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:4px 6px;text-align:center;min-width:0}
+  .anim-stat small{display:block;font-size:9px;color:var(--text-dim)}
+  .anim-stat b{font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:13px;color:var(--accent);white-space:nowrap}
+  .anim-info{font-size:11px;line-height:1.5;color:var(--text);margin:10px 0 6px}
+  .anim-sum{font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;line-height:1.7;color:var(--text-dim);margin-bottom:10px;padding:6px 8px;background:var(--bg);border-radius:6px}
+  .anim-sum b{color:var(--accent);font-weight:600}
+  .anim-sum i{font-style:normal;color:#f59e0b}
+  .anim-sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:4px 0 12px}
+  .anim-note{font-size:10px;color:var(--text-dim);line-height:1.5}
+  .btn:disabled{opacity:0.4;cursor:default}
+  @media(max-width:768px){
+    .anim-dlg{width:100vw;height:100vh;height:100dvh;max-height:100dvh;border-radius:0;border:none;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+    .anim-dlg .btn{min-height:38px;padding:5px 9px}
+    .anim-dlg input[type="range"]{height:6px}
+    .anim-dlg input[type="range"]::-webkit-slider-thumb{width:24px;height:24px}
+    .anim-sliders{gap:10px}
+    .anim-stat b{font-size:12px}
+  }
+
   /* === IPAD portrait (narrow but not phone) === */
   @media(min-width:769px) and (max-width:1024px){
     .sidebar{width:230px}
@@ -299,21 +326,51 @@
 
 <!-- Animation Preview -->
 <div class="export-overlay" id="animOverlay" style="display:none" onclick="if(event.target===this)closeAnimation()">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;width:90vw;max-width:700px;max-height:85vh;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <div class="anim-dlg">
+    <div class="anim-head">
       <h3 style="font-size:15px">🌊 액션 미리보기</h3>
       <button class="btn" onclick="closeAnimation()">✕ 닫기</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    <div class="anim-row">
       <button class="btn" id="animPlayBtn" onclick="animTogglePlay()">▶ 재생</button>
+      <button class="btn" onclick="animFrame()">⏭ 프레임</button>
       <button class="btn" onclick="animStop()">⏹ 정지</button>
-      <span style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px">뷰:</span>
+      <span class="anim-lbl">뷰</span>
       <button class="btn anim-view-btn active" onclick="setAnimView('side',this)">측면</button>
       <button class="btn anim-view-btn" onclick="setAnimView('top',this)">상면</button>
+      <button class="btn anim-view-btn" onclick="setAnimView('both',this)">동시</button>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--text-dim)">운용법:</span><span id="animTechs" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
-    <canvas id="animCanvas" width="680" height="360" style="width:100%;background:#0c1829;border-radius:8px;border:1px solid var(--border)"></canvas>
-    <div style="font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;text-align:center" id="animInfo"></div>
+    <div class="anim-row"><span class="anim-lbl">운용법</span><span id="animTechs" class="anim-row" style="margin:0"></span></div>
+    <canvas id="animCanvas" width="680" height="360" class="anim-canvas" onclick="animTogglePlay()"></canvas>
+    <div class="anim-stats">
+      <div class="anim-stat"><small>수심</small><b id="hudD">-</b></div>
+      <div class="anim-stat"><small>속도</small><b id="hudV">-</b></div>
+      <div class="anim-stat"><small>자세</small><b id="hudP">-</b></div>
+      <div class="anim-stat"><small>워블</small><b id="hudH">-</b></div>
+    </div>
+    <canvas id="animGraph" width="680" height="108" class="anim-canvas" style="margin-top:8px"></canvas>
+    <div class="anim-info" id="animInfo"></div>
+    <div class="anim-sum" id="animSummary"></div>
+    <div class="anim-row">
+      <span class="anim-lbl">재생 속도</span>
+      <button class="btn anim-spd-btn" onclick="setAnimSpeed(0.25,this)">0.25×</button>
+      <button class="btn anim-spd-btn" onclick="setAnimSpeed(0.5,this)">0.5×</button>
+      <button class="btn anim-spd-btn active" onclick="setAnimSpeed(1,this)">1×</button>
+      <button class="btn anim-spd-btn" onclick="setAnimSpeed(2,this)">2×</button>
+    </div>
+    <div class="anim-sliders">
+      <div><div class="slider-header"><span class="anim-lbl">저크·트위치 세기</span><span class="slider-value" id="animOpt_power">×1.0</span></div>
+        <input type="range" min="0.5" max="1.6" step="0.1" value="1" oninput="setAnimOpt('power',+this.value)"></div>
+      <div><div class="slider-header"><span class="anim-lbl">포즈·정지 길이</span><span class="slider-value" id="animOpt_pause">×1.0</span></div>
+        <input type="range" min="0.5" max="2.5" step="0.1" value="1" oninput="setAnimOpt('pause',+this.value)"></div>
+    </div>
+    <div class="anim-row">
+      <button class="btn" id="animCGBtn" onclick="toggleAnimCG(this)">⊕ 무게중심·부력중심</button>
+      <button class="btn active" id="animGraphBtn" onclick="toggleAnimGraph(this)">📈 그래프</button>
+      <button class="btn" onclick="animSaveRef()">📌 기준 저장</button>
+      <button class="btn" id="animClearBtn" onclick="animClearRef()" disabled>기준 해제</button>
+    </div>
+    <div class="anim-note">기준 저장 후 디자인을 수정하고 다시 열면, 저장한 궤적(주황 점선)·그래프와 수치 변화를 비교할 수 있습니다.</div>
   </div>
 </div>
 
@@ -1528,11 +1585,18 @@ function classifyLure(lipOn, buoyClass, pitch, L, H) {
   return p<-12||L>=150?'divingPencil':'liplessMinnow';
 }
 function actionParams(o) {
-  const {type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed}=o;
+  const {type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,mass,vol,area,arm}=o;
   const rodV=SPEED_MS[speed], rest=pitch===null?0:pitch, hl=H/L, wh=W/H;
+  // Inertia and drag for the preview: the lure plus the water it drags along (added mass ≈ half its displaced
+  // water) against quadratic drag. Heavy, slim lures accelerate slowly and glide on; light, blunt ones stop fast.
+  const meff=(mass+0.5*vol*WATER)/1000;                                   // kg
+  const dragK=0.5*1000*(lip.on?1.0:0.8)*area*1e-6/meff;                   // 1/m: dv/dt = -dragK·v²
+  // Rest-posture restoring spring: ω² = g·|CG–CB| / (L²/12), the pitch oscillation after a jerk or a pull
+  const pitchW=Math.max(3,Math.min(14,Math.sqrt(9.81*Math.max(arm,2)/1000/((L/1000)*(L/1000)/12))));
   const a={type, rodV, restPitch:rest, swimPitch:rest*0.2, divePitch:18, wobHz:wobbleHz, yawAmp:4, rollAmp:10,
     dartYaw:25, diveRate:1.0, maxDepth:3, bottom:2, surface:false, startDepth:0,
-    freeRate:buoyClass==='S'?sinkRate:buoyClass==='F'?-riseRate:0, sinkRate, riseRate};
+    freeRate:buoyClass==='S'?sinkRate:buoyClass==='F'?-riseRate:0, sinkRate, riseRate,
+    dragK, pullRate:8*Math.max(0.5,Math.min(1.5,Math.sqrt(0.0225/meff))), pitchW};
   const sinking=Math.max(0.3,Math.min(2.5,sinkRate*2/rodV)); // a sinking lure settles deeper at slow speed
   if(type==='crank'){ Object.assign(a,{runDepth:depth, yawAmp:6+30*hl, rollAmp:8+6*wh, swimPitch:rest*0.2+10}); a.twitchDepth=depth; }
   else if(type==='minnow'||type==='jerkbait'){
@@ -1656,7 +1720,8 @@ function calcPhysics() {
   const hlRatio=H/L;
   const wobbleHz=0.2*SPEED_MS[speed]/(H/1000);
   const type=classifyLure(lip.on,buoyClass,pitch,L,H);
-  const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed});
+  const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,
+    mass:M, vol:V, area:aMax, arm:Math.hypot(cg.x-rp.cb.x, cg.z-rp.cb.z)});
   const lt=LURE_TYPES[type];
   let depthText;
   if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
@@ -1726,18 +1791,30 @@ function calcPhysics() {
 // Kinematic sketch of the chosen technique (not a fluid simulation). The camera follows the lure, so
 // the water particles, the trail and the splashes move past it. Side view: depth, scaled to the depth the
 // technique reaches; top view: sideways movement (1 m = LAT_PX). The lure travels nose first, toward the rod.
-const ANIM_W=680, ANIM_H=360, WATER_Y=60, PX_M=160, LAT_PX=300;
-let animRAF=null, animLastTs=null, animView='side', animRunning=false, animCtx=null, animTech=null, sim=null;
+// Speed follows the rod pull against quadratic water drag (inertia from mass + added mass), the posture
+// is a damped spring around its target, vertical speed relaxes to the free sink/rise rate on slack line,
+// and the wobble frequency follows the real speed (Strouhal) so a stopping lure stops wobbling.
+const ANIM_W=680, GRAPH_H=108, WATER_Y=60, PX_M=160, LAT_PX=300, REF_SECS=24, MONO="'SF Mono',SFMono-Regular,'Courier New',monospace";
+let animRAF=null, animLastTs=null, animView='side', animRunning=false, animCtx=null, animGctx=null, animTech=null, sim=null;
+let animH=360, animSpeed=1, animShowCG=false, animShowGraph=true, animRef=null, animCur=null, animHudTs=0;
+const animOpt={power:1, pause:1};
 
-function toggleAnimation(){
-  document.getElementById('animOverlay').style.display='flex';
-  // Back the canvas with device pixels so it stays sharp on high-DPI screens
-  const canvas=document.getElementById('animCanvas');
+// Back the canvases with device pixels so they stay sharp on high-DPI screens
+function animResize(){
   const dpr=window.devicePixelRatio||1;
-  canvas.width=ANIM_W*dpr; canvas.height=ANIM_H*dpr;
-  animCtx=canvas.getContext('2d');
-  animCtx.setTransform(dpr,0,0,dpr,0,0);
+  animH=animView==='both'?600:360;
+  const c=document.getElementById('animCanvas'), g=document.getElementById('animGraph');
+  c.width=ANIM_W*dpr; c.height=animH*dpr;
+  g.width=ANIM_W*dpr; g.height=GRAPH_H*dpr;
+  animCtx=c.getContext('2d'); animCtx.setTransform(dpr,0,0,dpr,0,0);
+  animGctx=g.getContext('2d'); animGctx.setTransform(dpr,0,0,dpr,0,0);
+  g.style.display=animShowGraph?'block':'none';
+}
+function toggleAnimation(){
   calcPhysics();
+  if(!lastPhys) return;
+  document.getElementById('animOverlay').style.display='flex';
+  animResize();
   const techs=LURE_TYPES[lastPhys.act.type].techs;
   if(!techs.includes(animTech)) animTech=techs[0];
   updateAnimTechs();
@@ -1750,18 +1827,63 @@ function closeAnimation(){
 }
 function setAnimView(v,btn){
   animView=v;
-  document.querySelectorAll('.anim-view-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('.anim-view-btn').forEach(b=>b.classList.toggle('active',b===btn));
+  animResize();
   if(!animRunning) drawAnimation();
 }
+function setAnimSpeed(v,btn){
+  animSpeed=v;
+  document.querySelectorAll('.anim-spd-btn').forEach(b=>b.classList.toggle('active',b===btn));
+}
+function setAnimOpt(k,v){
+  animOpt[k]=v;
+  document.getElementById('animOpt_'+k).textContent='×'+v.toFixed(1);
+  animRefresh(); animReset();
+  if(!animRunning) drawAnimation();
+}
+function toggleAnimCG(btn){
+  animShowCG=!animShowCG; btn.classList.toggle('active',animShowCG);
+  if(!animRunning) drawAnimation();
+}
+function toggleAnimGraph(btn){
+  animShowGraph=!animShowGraph; btn.classList.toggle('active',animShowGraph);
+  document.getElementById('animGraph').style.display=animShowGraph?'block':'none';
+  if(!animRunning) drawAnimation();
+}
+// Reference run: the trajectory and numbers of the design as it is now, kept while the design is edited
+function animSaveRef(){
+  const a=lastPhys.act;
+  animRef=Object.assign(animSimulate(a,animTech,animOpt,REF_SECS),{tech:animTech, type:a.type});
+  updateAnimSummary();
+  if(!animRunning) drawAnimation();
+}
+function animClearRef(){ animRef=null; updateAnimSummary(); if(!animRunning) drawAnimation(); }
+function animRefOk(){ return animRef && animRef.tech===animTech && animRef.type===lastPhys.act.type; }
+
 // Technique buttons for the detected lure type, and the description of the chosen one
 function updateAnimTechs(){
   const a=lastPhys.act;
   document.getElementById('animTechs').innerHTML=LURE_TYPES[a.type].techs.map(t=>
     '<button class="btn'+(t===animTech?' active':'')+'" onclick="setAnimTech(\''+t+'\')">'+TECH_NAMES[t]+'</button>').join('');
   document.getElementById('animInfo').textContent=LURE_TYPES[a.type].name+' · '+TECH_NAMES[animTech]+' — '+actionText(a,animTech);
+  animRefresh();
 }
 function setAnimTech(t){ animTech=t; updateAnimTechs(); animReset(); if(!animRunning) drawAnimation(); }
+// Numbers of a full headless run of the current design and technique, against the reference when there is one
+function animRefresh(){
+  animCur=animSimulate(lastPhys.act,animTech,animOpt,REF_SECS);
+  updateAnimSummary();
+}
+function updateAnimSummary(){
+  const c=animCur, r=animRefOk()?animRef:null;
+  const row=(n,k,u)=>n+' <b>'+c[k].toFixed(2)+u+'</b>'+(r&&Math.abs(c[k]-r[k])>=0.005?' <i>('+(c[k]>r[k]?'+':'−')+Math.abs(c[k]-r[k]).toFixed(2)+')</i>':'');
+  let h=REF_SECS+'초 시뮬 · '+row('최대 수심','maxD',' m')+' · '+row('평균 속도','avgV',' m/s')+' · '+row('최고 속도','peakV',' m/s');
+  if(r) h+='<br><i>주황 점선 = 저장한 기준과 비교 (괄호는 기준 대비 변화)</i>';
+  else if(animRef) h+='<br><i>저장한 기준은 '+LURE_TYPES[animRef.type].name+' · '+TECH_NAMES[animRef.tech]+' 입니다 (현재와 다른 루어·운용법)</i>';
+  document.getElementById('animSummary').innerHTML=h;
+  document.getElementById('animClearBtn').disabled=!animRef;
+}
+
 function animTogglePlay(){ if(animRunning) animPause(); else animPlay(); }
 function animPlay(){
   if(animRunning)return;
@@ -1781,102 +1903,188 @@ function animStop(){
   animReset();
   if(animCtx) drawAnimation();
 }
-function animReset(){
-  const a=lastPhys.act;
-  const reach={jerk:a.diveDepth, twitch:a.twitchDepth, liftfall:a.bottom}[animTech]??(a.surface?0:a.runDepth);
+// Advance one frame (1/30 s) while paused
+function animFrame(){
+  animPause();
+  for(let i=0;i<4;i++) animStep(sim,lastPhys.act,animTech,1/120,animOpt);
+  drawAnimation();
+}
+function animReset(){ sim=newSim(lastPhys.act,animTech,true,animOpt); animHud(true); }
+
+function newSim(a,tech,live,opt){
+  const dpw=Math.min(1.5,Math.pow(opt.power,0.7));
+  const reach={jerk:a.diveDepth*dpw, twitch:a.twitchDepth*dpw, liftfall:a.bottom}[tech]??(a.surface?0:a.runDepth);
   const shown=Math.min(3,Math.max(0.8,Math.max(reach,a.startDepth)*1.3+0.2)); // metres shown below the surface
-  sim={t:0, x:0, lat:0, d:a.startDepth, v:0, head:0, yaw:0, pitch:a.restPitch, roll:0, hist:[], splash:[], phase:'go', phaseT:0, n:0,
-    depthPx:(ANIM_H-WATER_Y-24)/shown, shown};
+  return {live, shown, nose:xRange(sidePts).mx/1000, t:0, x:0, lat:0, d:a.startDepth, v:0, vd:0, head:0, yaw:0,
+    pitch:a.restPitch, pv:0, roll:0, ph:0, hz:0, phase:'go', phaseT:0, n:0, k:-1, maxD:a.startDepth, peakV:0,
+    hist:[], splash:[], bubbles:[], rings:[], gh:[], ghT:0, ser:[], serT:0, bubAcc:0};
+}
+// Headless run of the same step function: trajectory, time series and summary numbers
+function animSimulate(a,tech,opt,secs){
+  const s=newSim(a,tech,false,opt), pts=[], dt=1/120, N=Math.round(secs/dt);
+  for(let i=0;i<N;i++){ animStep(s,a,tech,dt,opt); if(i%6===0) pts.push({x:s.x, d:s.d, lat:s.lat}); }
+  return {pts, ser:s.ser, maxD:s.maxD, peakV:s.peakV, avgV:s.x/secs, secs};
 }
 
 function animLoop(ts){
   if(!animRunning)return;
   // Advance by real elapsed time (in small steps) so speed doesn't depend on the display refresh rate
-  if(animLastTs!==null){ let dt=Math.min(0.1,(ts-animLastTs)/1000); while(dt>0){ const h=Math.min(dt,1/120); animStep(h); dt-=h; } }
+  if(animLastTs!==null){ let dt=Math.min(0.1,(ts-animLastTs)/1000)*animSpeed; while(dt>0){ const h=Math.min(dt,1/120); animStep(sim,lastPhys.act,animTech,h,animOpt); dt-=h; } }
   animLastTs=ts;
   drawAnimation();
   animRAF=requestAnimationFrame(animLoop);
 }
 
-// One time step (s) of the technique: target speed, depth and heading, then simple first-order responses
-function animStep(dt){
-  const a=lastPhys.act, s=sim, tech=animTech;
+function animRing(s){ if(s.live && s.d<0.15) s.rings.push({x:s.x+s.nose, lat:s.lat, age:0}); }
+function animSplash(s){
+  if(!s.live) return;
+  for(let i=0;i<14;i++) s.splash.push({x:s.x+s.nose+0.01, h:0, vx:0.1+Math.random()*0.5, vh:0.4+Math.random()*0.7, life:0.5+Math.random()*0.3});
+}
+
+// One time step (s) of the technique: target speed, depth and heading, then the dynamics
+function animStep(s,a,tech,dt,opt){
   s.t+=dt; s.phaseT+=dt;
-  const osc=(hz,amp,ph)=>Math.sin(2*Math.PI*Math.min(hz,7)*s.t+(ph||0))*amp; // capped so it stays visible
+  const pw=opt.power, ps=opt.pause, dpw=Math.min(1.5,Math.pow(pw,0.7));
   let vT=a.rodV, dT=a.runDepth, dRate=0.6, headT=0, yawO=0, pitchT=a.swimPitch, rollT=0, slack=false;
-  const swim=()=>{ yawO=osc(a.wobHz,a.yawAmp); rollT=osc(a.wobHz,a.rollAmp,Math.PI/2); };
+  // Wobble: frequency follows the actual speed, amplitude fades as the lure slows down
+  s.hz=Math.min(7,a.wobHz*Math.min(1.6,s.v/Math.max(a.rodV,0.05)));
+  s.ph+=2*Math.PI*s.hz*dt;
+  const fade=Math.min(1,s.v/Math.max(a.rodV*0.6,0.05));
+  const osc=(amp,ph)=>Math.sin(s.ph+(ph||0))*amp*fade;
+  const slow=(hz,amp,ph)=>Math.sin(2*Math.PI*hz*s.t+(ph||0))*amp; // fixed-rate shake (capped by the caller's values)
+  const swim=()=>{ yawO=osc(a.yawAmp); rollT=osc(a.rollAmp,Math.PI/2); };
   if(tech==='retrieve') swim();
   else if(tech==='jerk'||tech==='twitch'){
-    const jerk=tech==='jerk', J=jerk?0.45:0.18, P=jerk?1.4:0.5, side=s.n%2?1:-1;
+    const jerk=tech==='jerk', J=jerk?0.45:0.18, P=(jerk?1.4:0.5)*ps, side=s.n%2?1:-1;
     if(s.phase==='go'){
-      vT=a.rodV*(jerk?3:2); dT=jerk?a.diveDepth:a.twitchDepth; dRate=a.diveRate;
-      headT=side*a.dartYaw*(jerk?1:0.6); rollT=osc(3,a.rollAmp*1.4);
+      vT=a.rodV*(jerk?3:2)*pw; dT=(jerk?a.diveDepth:a.twitchDepth)*dpw; dRate=a.diveRate;
+      headT=side*a.dartYaw*(jerk?1:0.6)*Math.min(1.4,pw); rollT=slow(3,a.rollAmp*1.4);
       pitchT=dT>s.d+0.03?a.divePitch:a.swimPitch;
       if(s.phaseT>=J){ s.phase='pause'; s.phaseT=0; }
     } else {
       // Line slack: buoyancy takes over. A floating lure waits until it is back at the surface.
       vT=0; slack=true; headT=s.head; pitchT=a.restPitch;
       const up=a.freeRate<0 && s.d>0.01;
-      if(s.phaseT>=(up?3:P) || (a.freeRate<0 && !up && s.phaseT>=Math.min(P,0.4))){ s.phase='go'; s.phaseT=0; s.n++; }
+      if(s.phaseT>=(up?3:P) || (a.freeRate<0 && !up && s.phaseT>=Math.min(P,0.4))){ s.phase='go'; s.phaseT=0; s.n++; animRing(s); }
     }
   }
   else if(tech==='walk'){
     const T=0.42, n=Math.floor(s.t/T), tc=s.t-n*T;
-    vT=tc<0.12?a.rodV*2.2:0.05; headT=(n%2?1:-1)*42; dT=0; pitchT=a.restPitch*0.5;
+    vT=tc<0.12?a.rodV*2.2*pw:0.05; headT=(n%2?1:-1)*42; dT=0; pitchT=a.restPitch*0.5;
+    if(n!==s.k){ s.k=n; animRing(s); }
   }
   else if(tech==='pop'){
     const T=1.3, n=Math.floor(s.t/T), tc=s.t-n*T;
-    if(tc<0.16){ vT=a.rodV*2; pitchT=a.restPitch*0.5+25; if(s.n!==n+1){ s.n=n+1; animSplash(); } }
+    if(tc<0.16){ vT=a.rodV*2*pw; pitchT=a.restPitch*0.5+25; if(s.k!==n){ s.k=n; animSplash(s); animRing(s); } }
     else { vT=0; pitchT=a.restPitch; }
     dT=0;
   }
   else if(tech==='liftfall'){
-    if(s.phase==='go'){ vT=a.rodV*1.3; dT=Math.max(0,a.bottom-1.2); dRate=0.8; swim(); if(s.phaseT>=1.2){ s.phase='fall'; s.phaseT=0; } }
-    else { vT=0.12; slack=true; yawO=osc(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01){ s.phase='go'; s.phaseT=0; } }
+    if(s.phase==='go'){ vT=a.rodV*1.3*pw; dT=Math.max(0,a.bottom-1.2); dRate=0.8; swim(); if(s.phaseT>=1.2){ s.phase='fall'; s.phaseT=0; } }
+    else { vT=0.12; slack=true; yawO=slow(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01){ s.phase='go'; s.phaseT=0; } }
   }
   else if(tech==='stopgo'){
-    const T=3.2, tc=s.t%T;
-    if(tc<2.2) swim(); else { vT=0; slack=true; pitchT=a.restPitch; }
+    const G=2.2, T=G+1.0*ps, tc=s.t%T;
+    if(tc<G) swim(); else { vT=0; slack=true; pitchT=a.restPitch; }
   }
-  // Fast surge when pulled, slower glide-out when the line goes slack
-  s.v+=(vT-s.v)*Math.min(1,dt*(vT>s.v?8:2.5));
+  // Speed: the rod pulls toward the target (slower for a heavy lure); otherwise only the water drag brakes it
+  if(vT>s.v) s.v+=(vT-s.v)*Math.min(1,dt*a.pullRate);
+  else s.v=Math.max(vT,s.v-(a.dragK*s.v*s.v+0.03)*dt);
   s.x+=s.v*dt;
-  if(slack) s.d+=a.freeRate*dt; // + sinks, - rises
-  else { const dd=dT-s.d; s.d+=Math.sign(dd)*Math.min(Math.abs(dd),dRate*dt*Math.min(1.5,Math.max(0.3,s.v/a.rodV))); }
+  // Depth: driven toward the target depth by the lip / dive, or on slack line relaxing to the free sink/rise rate
+  const d0=s.d;
+  if(slack){ s.vd+=(a.freeRate-s.vd)*Math.min(1,dt*3); s.d+=s.vd*dt; }
+  else { const dd=dT-s.d; s.d+=Math.sign(dd)*Math.min(Math.abs(dd),dRate*dt*Math.min(1.5,Math.max(0.3,s.v/Math.max(a.rodV,0.05)))); }
   s.d=a.surface||tech==='walk'||tech==='pop'?0:Math.max(0,Math.min(a.maxDepth,s.d));
+  if(slack){ if((s.d<=0&&s.vd<0)||(s.d>=a.maxDepth&&s.vd>0)) s.vd=0; }
+  else s.vd=(s.d-d0)/dt;
   s.head+=(headT-s.head)*Math.min(1,dt*10);
   s.yaw=s.head+yawO;
   // Sideways drift along the heading; the line slowly pulls the lure back onto the centre line
   s.lat+=0.6*s.v*Math.sin(s.head*Math.PI/180)*dt; s.lat*=1-Math.min(1,dt*0.6);
-  s.pitch+=(pitchT-s.pitch)*Math.min(1,dt*4);
+  // Posture: damped spring toward the target (ζ≈0.45), ω from the CG–CB lever arm
+  s.pv+=(a.pitchW*a.pitchW*(pitchT-s.pitch)-0.9*a.pitchW*s.pv)*dt;
+  s.pitch+=s.pv*dt;
   s.roll=rollT;
-  s.hist.push({x:s.x, d:s.d, lat:s.lat});
+  if(s.d>s.maxD) s.maxD=s.d;
+  if(s.v>s.peakV) s.peakV=s.v;
+  s.serT+=dt;
+  if(s.serT>=0.05){
+    s.serT=0; s.ser.push({t:s.t, d:s.d, v:s.v, p:s.pitch});
+    if(s.live) while(s.ser[0].t<s.t-7) s.ser.shift();
+  }
+  if(!s.live) return;
+  // Visual extras (live run only)
+  const L=s.hist[s.hist.length-1];
+  if(!L || Math.abs(L.x-s.x)+Math.abs(L.d-s.d)+Math.abs(L.lat-s.lat)>0.002) s.hist.push({x:s.x, d:s.d, lat:s.lat});
   while(s.hist.length && s.x-s.hist[0].x>ANIM_W*0.55/PX_M) s.hist.shift();
+  s.ghT+=dt;
+  if(s.ghT>=0.05){ s.ghT=0; s.gh.push({x:s.x, d:s.d, lat:s.lat, pitch:s.pitch, yaw:s.yaw, roll:s.roll}); if(s.gh.length>4) s.gh.shift(); }
+  if(s.d>0.05){ // bubbles shed by a lure working under water
+    s.bubAcc+=dt*(s.v*9+Math.abs(s.vd)*4);
+    while(s.bubAcc>=1){ s.bubAcc--; s.bubbles.push({x:s.x+s.nose*(0.1+Math.random()*0.8), d:s.d, vd:-(0.12+Math.random()*0.14), life:1+Math.random()*0.8, r:1+Math.random()*1.8}); }
+  }
+  for(const b of s.bubbles){ b.life-=dt; b.d+=b.vd*dt; if(b.d<0) b.life=0; }
+  s.bubbles=s.bubbles.filter(b=>b.life>0);
+  for(const r of s.rings) r.age+=dt;
+  s.rings=s.rings.filter(r=>r.age<1.4);
   for(const p of s.splash){ p.life-=dt; p.x+=p.vx*dt; p.h+=p.vh*dt; p.vh-=4*dt; }
-  sim.splash=s.splash.filter(p=>p.life>0);
+  s.splash=s.splash.filter(p=>p.life>0);
 }
-function animSplash(){
-  const nose=xRange(sidePts).mx/1000;
-  for(let i=0;i<14;i++) sim.splash.push({x:sim.x+nose+0.01, h:0, vx:0.1+Math.random()*0.5, vh:0.4+Math.random()*0.7, life:0.5+Math.random()*0.3});
+
+// Numbers under the canvas (refreshed ~10×/s)
+function animHud(force){
+  const now=performance.now();
+  if(!force && now-animHudTs<100) return;
+  animHudTs=now;
+  const s=sim, set=(id,t)=>document.getElementById(id).textContent=t;
+  set('hudD',s.d.toFixed(2)+' m');
+  set('hudV',s.v.toFixed(2)+' m/s');
+  set('hudP',Math.abs(s.pitch).toFixed(0)+'° '+(s.pitch>3?'머리↓':s.pitch<-3?'꼬리↓':'수평'));
+  set('hudH',s.hz.toFixed(1)+' Hz');
 }
 
 function drawAnimation(){
-  const ctx=animCtx, cw=ANIM_W, ch=ANIM_H, s=sim, ph=lastPhys, side=animView==='side';
-  const X0=cw*0.5, sc=Math.min(0.7,140/ph.L), toX=x=>X0+(x-s.x)*PX_M, DPX=s.depthPx, rad=Math.PI/180;
+  const ctx=animCtx, s=sim;
+  ctx.clearRect(0,0,ANIM_W,animH);
+  if(animView==='both'){
+    const h=animH/2;
+    drawPane(ctx,s,true,0,h);
+    drawPane(ctx,s,false,h,h);
+    ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.fillRect(0,h-1,ANIM_W,2);
+  } else drawPane(ctx,s,animView==='side',0,animH);
+  drawGraph();
+  animHud();
+}
+
+// One view (side: depth, or top: sideways movement) drawn into the band [y0, y0+ch) of the canvas
+function drawPane(ctx,s,side,y0,ch){
+  const cw=ANIM_W, ph=lastPhys, a=ph.act, rad=Math.PI/180, refOk=animRefOk();
+  ctx.save(); ctx.beginPath(); ctx.rect(0,y0,cw,ch); ctx.clip(); ctx.translate(0,y0);
+  const X0=cw*0.5, sc=Math.min(0.7,140/ph.L), toX=x=>X0+(x-s.x)*PX_M, DPX=(ch-WATER_Y-24)/s.shown;
   const noseR=xRange(sidePts).mx*sc;
-  ctx.clearRect(0,0,cw,ch);
-  ctx.fillStyle='#0d2847'; ctx.fillRect(0,0,cw,ch);
-  ctx.font="10px 'SF Mono',SFMono-Regular,'Courier New',monospace";
+  const yOf=h=>side?WATER_Y+h.d*DPX:Math.max(30,Math.min(ch-30,ch/2+h.lat*LAT_PX));
+  ctx.font="12px "+MONO;
   if(side){
     ctx.fillStyle='#0c1829'; ctx.fillRect(0,0,cw,WATER_Y);
-    ctx.strokeStyle='rgba(34,211,238,0.35)'; ctx.lineWidth=1.5; ctx.beginPath();
+    const g=ctx.createLinearGradient(0,WATER_Y,0,ch); g.addColorStop(0,'#15567f'); g.addColorStop(1,'#061528');
+    ctx.fillStyle=g; ctx.fillRect(0,WATER_Y,cw,ch-WATER_Y);
+    // Slow light shafts from the surface
+    ctx.fillStyle='rgba(140,210,255,0.045)';
+    for(let i=0;i<5;i++){ const bx=(((i*151-s.x*PX_M*0.25+s.t*6)%(cw+200))+cw+200)%(cw+200)-100, w=26+i*9;
+      ctx.beginPath(); ctx.moveTo(bx,WATER_Y); ctx.lineTo(bx+w,WATER_Y); ctx.lineTo(bx+w-70,ch); ctx.lineTo(bx-70,ch); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='rgba(34,211,238,0.45)'; ctx.lineWidth=1.5; ctx.beginPath();
     for(let x=0;x<=cw;x+=4){ const wx=x+s.x*PX_M, wy=WATER_Y+Math.sin(wx*0.035)*2+Math.sin(wx*0.08+s.t*2)*1; x?ctx.lineTo(x,wy):ctx.moveTo(x,wy); }
     ctx.stroke();
     // Depth scale
-    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.textAlign='left';
+    ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.textAlign='left';
     const step=s.shown<=1.5?0.25:0.5;
-    for(let m=step;WATER_Y+m*DPX<ch;m+=step){ const y=WATER_Y+m*DPX; ctx.beginPath(); ctx.moveTo(30,y); ctx.lineTo(cw,y); ctx.stroke(); ctx.fillText(m.toFixed(2).replace(/0$/,'')+'m',4,y+3); }
+    for(let m=step;WATER_Y+m*DPX<ch;m+=step){ const y=WATER_Y+m*DPX; ctx.beginPath(); ctx.moveTo(40,y); ctx.lineTo(cw,y); ctx.stroke(); ctx.fillText(m.toFixed(2).replace(/0$/,'')+'m',4,y+4); }
+    if(animTech==='liftfall' && WATER_Y+a.bottom*DPX<ch){ // the bottom the lift & fall works along
+      const y=WATER_Y+a.bottom*DPX+6; ctx.fillStyle='rgba(120,90,50,0.55)'; ctx.fillRect(0,y,cw,ch-y);
+    }
   } else {
+    ctx.fillStyle='#0f3252'; ctx.fillRect(0,0,cw,ch);
     ctx.strokeStyle='rgba(255,255,255,0.1)'; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(0,ch/2); ctx.lineTo(cw,ch/2); ctx.stroke(); ctx.setLineDash([]);
   }
   // Particles fixed in the water: they stream past as the lure moves
@@ -1885,32 +2093,62 @@ function drawAnimation(){
     const px=((i*173.7-s.x*PX_M)%cw+cw)%cw, py=side?WATER_Y+8+(i*61.3)%(ch-WATER_Y-12):(i*89.1)%ch;
     ctx.fillRect(px,py,1.5,1.5);
   }
+  // Reference trajectory (saved design)
+  if(refOk){
+    ctx.strokeStyle='rgba(245,158,11,0.8)'; ctx.lineWidth=2; ctx.setLineDash([6,5]); ctx.beginPath();
+    let st=false;
+    for(const p of animRef.pts){ const x=toX(p.x); if(x<-20||x>cw+20){ st=false; continue; } const y=yOf(p); st?ctx.lineTo(x,y):ctx.moveTo(x,y); st=true; }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
   // Trail: depth path (side) or sideways path (top)
-  // At the surface the lure floats with its nose just out of the water (side view)
-  const float=side?(1-Math.min(1,s.d/0.1))*(Math.max(0,-Math.sin(s.pitch*rad))*noseR*0.85+ph.H*sc*0.2):0;
-  const yOf=h=>side?WATER_Y+h.d*DPX:Math.max(30,Math.min(ch-30,ch/2+h.lat*LAT_PX));
-  ctx.strokeStyle='rgba(34,211,238,0.35)'; ctx.lineWidth=2; ctx.beginPath();
+  ctx.strokeStyle='rgba(34,211,238,0.4)'; ctx.lineWidth=2; ctx.beginPath();
   s.hist.forEach((h,i)=>{ const x=toX(h.x), y=yOf(h); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
   ctx.stroke();
-  // Surface rings while working the surface (top view)
-  const ly=yOf(s)+float;
-  if(!side && s.d<0.02 && s.v>0.05){ ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(X0+xRange(topPts).mx*sc, ly, 6*k+(s.t*20%6), -Math.PI/3, Math.PI/3); ctx.stroke(); } }
-
-  // Lure
-  ctx.save(); ctx.translate(X0,ly);
+  // Bubbles (side)
   if(side){
-    ctx.rotate(s.pitch*rad);
-    ctx.scale(Math.max(0.3,Math.cos(s.yaw*rad)), 1-0.25*Math.abs(Math.sin(s.roll*rad)));
-    drawLureSide(ctx,ph,sc);
-  } else {
-    ctx.globalAlpha=Math.max(0.35,1-s.d*0.35); // deeper = fainter from above
-    ctx.rotate(s.yaw*rad);
-    ctx.scale(1, 0.45+0.55*Math.abs(Math.cos(s.roll*rad)));
-    drawLureTop(ctx,ph,sc);
+    ctx.strokeStyle='rgba(215,240,255,0.5)'; ctx.lineWidth=1;
+    for(const b of s.bubbles){ ctx.beginPath(); ctx.arc(toX(b.x),WATER_Y+b.d*DPX,b.r,0,Math.PI*2); ctx.stroke(); }
   }
-  ctx.restore();
+  // Surface rings: spreading where a stroke, pop or jerk hit the surface
+  for(const r of s.rings){
+    const k=r.age/1.4, rx=(0.03+0.45*k)*PX_M, x=toX(r.x);
+    ctx.strokeStyle='rgba(255,255,255,'+(0.5*(1-k)).toFixed(2)+')'; ctx.lineWidth=1.3; ctx.beginPath();
+    if(side) ctx.ellipse(x,WATER_Y,rx,rx*0.12,0,0,Math.PI*2);
+    else ctx.arc(x,Math.max(30,Math.min(ch-30,ch/2+r.lat*LAT_PX)),rx,0,Math.PI*2);
+    ctx.stroke();
+  }
+  // At the surface the lure floats with its nose just out of the water (side view)
+  const floatOf=P=>side?(1-Math.min(1,P.d/0.1))*(Math.max(0,-Math.sin(P.pitch*rad))*noseR*0.85+ph.H*sc*0.2):0;
+  function lureAt(P,alpha){
+    const x=toX(P.x), y=yOf(P)+floatOf(P);
+    let ang,sx,sy;
+    if(side){ ang=P.pitch*rad; sx=Math.max(0.3,Math.cos(P.yaw*rad)); sy=1-0.25*Math.abs(Math.sin(P.roll*rad)); }
+    else { ang=P.yaw*rad; sx=1; sy=0.45+0.55*Math.abs(Math.cos(P.roll*rad)); }
+    ctx.save(); ctx.globalAlpha=alpha*(side?1:Math.max(0.35,1-P.d*0.35)); // deeper = fainter from above
+    ctx.translate(x,y); ctx.rotate(ang); ctx.scale(sx,sy);
+    if(side) drawLureSide(ctx,ph,sc); else drawLureTop(ctx,ph,sc);
+    ctx.restore();
+    return {x,y,ang,sx,sy};
+  }
+  // Afterimages of the last few poses show how fast the lure swings
+  s.gh.forEach((g,i)=>lureAt(g,0.05+0.05*i));
+  const T=lureAt(s,1);
+  // Surface wake arcs in the top view
+  if(!side && s.d<0.02 && s.v>0.05){ ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(X0+xRange(topPts).mx*sc, T.y, 6*k+(s.t*20%6), -Math.PI/3, Math.PI/3); ctx.stroke(); } }
+  // Centre of gravity (G) and buoyancy (B), plus the vertical through G (side view)
+  if(animShowCG){
+    const loc=(lx,lz)=>({x:T.x+lx*T.sx*Math.cos(T.ang)-lz*T.sy*Math.sin(T.ang), y:T.y+lx*T.sx*Math.sin(T.ang)+lz*T.sy*Math.cos(T.ang)});
+    const G=loc(ph.cg.x*sc, side?ph.cg.z*sc:0), B=loc(ph.cb.x*sc, side?ph.cb.z*sc:0);
+    if(side){ ctx.strokeStyle='rgba(239,68,68,0.8)'; ctx.lineWidth=1.3; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(G.x,G.y-ph.H*sc-14); ctx.lineTo(G.x,G.y+ph.H*sc+14); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.font="bold 14px "+MONO; ctx.textAlign='left';
+    ctx.beginPath(); ctx.arc(B.x,B.y,6,0,Math.PI*2); ctx.fillStyle='#3b82f6'; ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#93c5fd'; ctx.fillText('B',B.x+9,B.y+5);
+    ctx.beginPath(); ctx.arc(G.x,G.y,6,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#111'; ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(G.x-6,G.y); ctx.lineTo(G.x+6,G.y); ctx.moveTo(G.x,G.y-6); ctx.lineTo(G.x,G.y+6); ctx.lineWidth=1.3; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.fillText('G',G.x+9,G.y-8);
+  }
   // Line from the nose to the rod
-  const ang=(side?s.pitch:s.yaw)*rad, nx=X0+Math.cos(ang)*noseR, ny=ly+Math.sin(ang)*noseR;
+  const ang=(side?s.pitch:s.yaw)*rad, nx=T.x+Math.cos(ang)*noseR, ny=T.y+Math.sin(ang)*noseR;
   ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(nx,ny);
   if(side) ctx.quadraticCurveTo(cw*0.85,WATER_Y+8,cw-6,14); else ctx.quadraticCurveTo(cw*0.85,ch/2,cw,ch/2);
   ctx.stroke(); ctx.setLineDash([]);
@@ -1919,11 +2157,44 @@ function drawAnimation(){
   for(const p of s.splash){
     const x=toX(p.x);
     if(side) ctx.fillRect(x, WATER_Y-p.h*90, 2.5, 2.5);
-    else { ctx.beginPath(); ctx.arc(x, ly+(p.vx-0.35)*60, 1.5+p.h*3, 0, Math.PI*2); ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(x, T.y+(p.vx-0.35)*60, 1.5+p.h*3, 0, Math.PI*2); ctx.fill(); }
   }
-  // Current depth / speed
-  ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.textAlign='right';
-  ctx.fillText('수심 '+s.d.toFixed(2)+' m · '+s.v.toFixed(2)+' m/s', cw-8, ch-8);
+  // View tag
+  ctx.font="bold 12px "+MONO; ctx.textAlign='right'; ctx.fillStyle='rgba(255,255,255,0.45)';
+  ctx.fillText(side?'SIDE · 수심':'TOP · 좌우',cw-8,18);
+  ctx.restore();
+}
+
+// Last ~6 s of depth, speed and posture (and the reference depth, when there is one)
+function drawGraph(){
+  if(!animShowGraph||!animGctx) return;
+  const g=animGctx, s=sim, a=lastPhys.act, W=ANIM_W, win=6, t1=s.t, t0=t1-win, px0=64, px1=W-84, RH=GRAPH_H/3;
+  const X=t=>px0+(t-t0)/win*(px1-px0);
+  g.clearRect(0,0,W,GRAPH_H); g.fillStyle='#0c1829'; g.fillRect(0,0,W,GRAPH_H);
+  const vis=s.ser.filter(p=>p.t>=t0);
+  const pm=Math.max(30,Math.ceil(Math.max(0,...vis.map(p=>Math.abs(p.p)))/10)*10);
+  const rows=[
+    {n:'수심', f:p=>p.d, lo:0, hi:s.shown, down:true, c:'#22d3ee', val:s.d.toFixed(2)+'m', ref:true},
+    {n:'속도', f:p=>p.v, lo:0, hi:Math.max(1,a.rodV*3.2), c:'#a78bfa', val:s.v.toFixed(2)+'m/s'},
+    {n:'자세', f:p=>p.p, lo:-pm, hi:pm, c:'#f59e0b', val:s.pitch.toFixed(0)+'°', zero:true}
+  ];
+  g.font="12px "+MONO; g.lineJoin='round';
+  rows.forEach((r,i)=>{
+    const top=i*RH+4, h=RH-8, Y=v=>r.down?top+(v-r.lo)/(r.hi-r.lo)*h:top+h-(v-r.lo)/(r.hi-r.lo)*h;
+    g.strokeStyle='rgba(255,255,255,0.1)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(px0,i*RH); g.lineTo(px1,i*RH); g.stroke();
+    if(r.zero){ g.setLineDash([3,4]); g.beginPath(); g.moveTo(px0,Y(0)); g.lineTo(px1,Y(0)); g.stroke(); g.setLineDash([]); }
+    g.fillStyle='rgba(255,255,255,0.5)'; g.textAlign='left'; g.fillText(r.n,6,top+h/2+4);
+    g.fillStyle=r.c; g.textAlign='right'; g.fillText(r.val,W-6,top+h/2+4);
+    if(r.ref && animRefOk()){
+      g.strokeStyle='rgba(245,158,11,0.85)'; g.lineWidth=1.5; g.setLineDash([5,4]); g.beginPath(); let st=false;
+      for(const p of animRef.ser){ if(p.t<t0||p.t>t1) continue; const x=X(p.t), y=Y(r.f(p)); st?g.lineTo(x,y):g.moveTo(x,y); st=true; }
+      g.stroke(); g.setLineDash([]);
+    }
+    g.strokeStyle=r.c; g.lineWidth=1.8; g.beginPath();
+    vis.forEach((p,k)=>{ const x=X(p.t), y=Y(Math.max(r.lo,Math.min(r.hi,r.f(p)))); k?g.lineTo(x,y):g.moveTo(x,y); });
+    g.stroke();
+  });
 }
 
 // Closed smooth outline (same curve as smoothPath) scaled by sc
