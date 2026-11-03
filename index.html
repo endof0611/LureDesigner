@@ -218,6 +218,16 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 너비 (mm)</span><span class="slider-value" id="topWVal">24</span></div>
         <input type="range" min="6" max="60" value="24" id="topWSlider" oninput="scaleTopWidth(this.value)"></div>
       <div id="sizeInfo" class="size-info">130 × 44 × 24 mm</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+        <div style="flex:1">
+          <div class="slider-group"><div class="slider-header"><span class="control-label">단면 각짐</span><span class="slider-value" id="sectNVal">타원</span></div>
+            <input type="range" min="2" max="6" value="2" step="0.1" id="sectNSlider" oninput="document.getElementById('sectNVal').textContent=CTL_FMT.sectN(this.value);drawSection();calcPhysics()"></div>
+          <div class="slider-group" style="margin-bottom:0"><div class="slider-header"><span class="control-label">단면 계란형</span><span class="slider-value" id="sectEVal">대칭</span></div>
+            <input type="range" min="-0.4" max="0.4" value="0" step="0.05" id="sectESlider" oninput="document.getElementById('sectEVal').textContent=CTL_FMT.sectE(this.value);drawSection();calcPhysics()"></div>
+        </div>
+        <svg id="sectPreview" width="64" height="76" viewBox="-32 -38 64 76" style="flex-shrink:0;background:var(--bg);border-radius:6px"></svg>
+      </div>
+      <div class="control-row" style="margin-top:6px"><span class="control-label" style="font-size:10px;color:var(--text-dim)">몸통을 가로로 자른 모양 (위 = 등, 아래 = 배). 높이·폭은 측면·상면 외곽선 그대로, 모양만 바뀌어 체적·부력·자세·롤 안정성에 반영</span></div>
       </div>
     </div>
     <div class="panel collapsed">
@@ -533,6 +543,8 @@ let presetDirty=false; // shape or lure settings changed since the preset was lo
 
 // Sidebar controls a preset sets; they are saved in the undo history together with the shape
 const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v, coat:v=>v, hardware:v=>v,
+  sectN:v=>+v<=2.05?'타원':+v>=5?'각진 '+(+v).toFixed(1):'둥근 사각 '+(+v).toFixed(1),
+  sectE:v=>Math.abs(v)<0.025?'대칭':(+v>0?'배 넓음 ':'등 넓음 ')+Math.abs(v).toFixed(2),
   lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
@@ -623,6 +635,7 @@ function applyPreset(cat, key) {
   }); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   setCtl('coat',p.coat||0); setCtl('hardware',p.hardware||0);
+  setCtl('sectN',p.sectN||2); setCtl('sectE',p.sectE||0); drawSection();
   document.getElementById('lipToggle').checked=!!p.lip;
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
   document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
@@ -690,7 +703,7 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
-  setWeightNote('');
+  setWeightNote(''); drawSection();
   updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
 function undoAction() {
@@ -822,7 +835,7 @@ function scaleTopWidth(v) {
 // Length × height × width (mm) of the drawn outline
 function lureSize() { const s=drawnRange('side'), t=drawnRange('top'); return [s.x.mx-s.x.mn, s.y.mx-s.y.mn, t.y.mx-t.y.mn]; }
 // From the outline itself: the sliders clamp to their ranges (e.g. length 40-250 mm)
-function updateSizeInfo() { document.getElementById('sizeInfo').textContent=lureSize().map(Math.round).join(' × ')+' mm'; }
+function updateSizeInfo() { document.getElementById('sizeInfo').textContent=lureSize().map(Math.round).join(' × ')+' mm'; drawSection(); }
 
 // Force both views to have identical X range (length):
 // scale the shorter one to match (anchored at its nose), then align the noses
@@ -1507,6 +1520,48 @@ function polyArea(pts) {
   return Math.abs(s)/2;
 }
 
+// Body cross-section (a slice across the length; half-width a from the top view, half-height b from the
+// side view). u = height/b from the centre, + toward the belly. Shape: superellipse |y/a|^n + |u|^n = 1
+// (n = 2 ellipse, larger = boxier), made egg-shaped by widening with (1 + e·u) (e > 0: wider at the belly)
+// and renormalised so the widest point is still a. Areas are in units of a·b.
+// seg(t): the part below the chord u = t: area f and centroid c (in b); w(u): half-width (in a);
+// F, c0: whole area and centroid; perK: perimeter relative to an ellipse of the same a, b.
+const SECT_ELLIPSE={ellipse:true, F:Math.PI, c0:0, perK:1, seg:t=>ellipseSeg(t), w:u=>Math.sqrt(Math.max(0,1-u*u))};
+let sectCache=null;
+function sectionProfile() {
+  const n=parseFloat(document.getElementById('sectNSlider').value), e=parseFloat(document.getElementById('sectESlider').value);
+  if(n<=2.0001 && Math.abs(e)<1e-6) return SECT_ELLIPSE; // exact formulas for the default
+  const key=n+'/'+e;
+  if(sectCache && sectCache.key===key) return sectCache;
+  const raw=u=>Math.pow(Math.max(0,1-Math.pow(Math.abs(u),n)),1/n)*(1+e*u);
+  let mx=0; for(let i=0;i<=2000;i++) mx=Math.max(mx,raw(-1+i/1000));
+  const w=u=>raw(u)/mx, N=400, S=new Float64Array(N+1), M1=new Float64Array(N+1);
+  for(let i=N-1;i>=0;i--){ // area and first moment below each chord, integrated up from the belly
+    const t0=-1+2*i/N, h=2/N/8; let a=0, m=0;
+    for(let k=0;k<8;k++){ const u=t0+(k+0.5)*h, d=2*w(u)*h; a+=d; m+=u*d; }
+    S[i]=S[i+1]+a; M1[i]=M1[i+1]+m;
+  }
+  let per=0, py=w(-1), pu=-1; // perimeter at a = b = 1 (both sides)
+  for(let i=1;i<=4000;i++){ const u=-1+i/2000, y=w(u); per+=2*Math.hypot(y-py,u-pu); py=y; pu=u; }
+  const seg=t=>{
+    if(t<=-1) return {f:S[0], c:M1[0]/S[0]};
+    if(t>=1) return {f:0, c:1};
+    const x=(t+1)/2*N, i=Math.min(N-1,Math.floor(x)), r=x-i, f=S[i]+(S[i+1]-S[i])*r, m=M1[i]+(M1[i+1]-M1[i])*r;
+    return {f, c:f>1e-9?m/f:1};
+  };
+  return sectCache={key, F:S[0], c0:M1[0]/S[0], perK:per/(2*Math.PI), seg, w};
+}
+// Sidebar preview of the cross-section, at the lure's own height : width ratio
+function drawSection() {
+  const sec=sectionProfile(), pts=[];
+  const [,H,W]=lureSize(), k=H>0&&W>0?W/H:1, ry=k>1?28/k:28, rx=ry*k;
+  for(let i=0;i<=60;i++){ const u=-1+i/30; pts.push((rx*sec.w(u)).toFixed(1)+','+(ry*u).toFixed(1)); }
+  for(let i=60;i>=0;i--){ const u=-1+i/30; pts.push((-rx*sec.w(u)).toFixed(1)+','+(ry*u).toFixed(1)); }
+  document.getElementById('sectPreview').innerHTML='<line x1="-30" y1="0" x2="30" y2="0" stroke="#334155" stroke-dasharray="2,2"/>'+
+    '<polygon points="'+pts.join(' ')+'" fill="#94a3b8" fill-opacity="0.35" stroke="#22d3ee" stroke-width="1.5"/>'+
+    '<text x="0" y="-31" text-anchor="middle" font-size="7" fill="#64748b">등</text><text x="0" y="36" text-anchor="middle" font-size="7" fill="#64748b">배</text>';
+}
+
 // Part of an ellipse (semi-axes a,b) below a horizontal chord at t·b from its centre (t in -1..1, +down):
 // area = a·b·f, centroid = centre + b·c
 function ellipseSeg(t) {
@@ -1522,16 +1577,17 @@ function ellipseSeg(t) {
 // Returns {pitch, cb, gm}: pitch is a number, 'neutral' (no restoring moment) or 'unstable' (would capsize);
 // cb is the centre of buoyancy of the submerged part at that pitch; gm is the roll (sideways) metacentric
 // height in mm at that pitch: > 0 rights itself, ≤ 0 rolls over.
-function restPitch(slices, parts, M, cg) {
+function restPitch(slices, parts, M, cg, sect) {
+  sect=sect||SECT_ELLIPSE;
   const pv=parts.reduce((s,i)=>s+i.v*1000,0); // mm³
   const pvx=parts.reduce((s,i)=>s+i.v*1000*i.x,0), pvz=parts.reduce((s,i)=>s+i.v*1000*i.z,0);
-  const fullV=slices.reduce((s,q)=>s+Math.PI*q.a*q.b*q.dx,0)+pv;
+  const fullV=slices.reduce((s,q)=>s+sect.F*q.a*q.b*q.dx,0)+pv;
   const target=M/WATER*1000;
   const submerged=(sn,cs,c)=>{
     // body point (x,z) is under water when x·sinθ + z·cosθ > c
     let v=pv, mx=pvx, mz=pvz;
     for(const q of slices){
-      const e=ellipseSeg(((c-q.x*sn)/cs-q.zc)/q.b);
+      const e=sect.seg(((c-q.x*sn)/cs-q.zc)/q.b);
       const dv=q.a*q.b*e.f*q.dx;
       v+=dv; mx+=q.x*dv; mz+=(q.zc+q.b*e.c)*dv;
     }
@@ -1560,7 +1616,7 @@ function restPitch(slices, parts, M, cg) {
     let I=0;
     if(c!==null) for(const q of slices){
       const t=((c-q.x*sn)/cs-q.zc)/q.b;
-      if(Math.abs(t)<1){ const y=q.a*Math.sqrt(1-t*t); I+=(2/3)*y*y*y*q.dx/Math.abs(cs); } // strip along the waterplane
+      if(Math.abs(t)<1){ const y=q.a*sect.w(t); I+=(2/3)*y*y*y*q.dx/Math.abs(cs); } // strip along the waterplane
     }
     return down(cg)-down(b)+(c===null?0:I/target);
   };
@@ -1859,14 +1915,15 @@ function calcPhysics() {
   // Body: integrate elliptical cross-sections (side height × top width) along the rendered outline
   const side=flattenSmooth(sidePts,SM,12), top=flattenSmooth(topPts,SM,12);
   const N=96, dx=L/N;
+  const sect=sectionProfile();
   let vBody=0, mxB=0, mzB=0, aMax=0;
   const slices=[];
   for(let k=0;k<N;k++){
     const x=sx.mn+(k+0.5)*dx;
     const s=spanAt(side,x), t=spanAt(top,x);
     if(!s||!t) continue;
-    const a=Math.PI/4*(s.mx-s.mn)*(t.mx-t.mn), dv=a*dx;
-    vBody+=dv; mxB+=x*dv; mzB+=(s.mn+s.mx)/2*dv;
+    const a=sect.F/4*(s.mx-s.mn)*(t.mx-t.mn), dv=a*dx; // cross-section area (π/4·H·W for an ellipse)
+    vBody+=dv; mxB+=x*dv; mzB+=((s.mn+s.mx)/2+(s.mx-s.mn)/2*sect.c0)*dv;
     slices.push({x, zc:(s.mn+s.mx)/2, a:(t.mx-t.mn)/2, b:(s.mx-s.mn)/2, dx});
     if(a>aMax) aMax=a;
   }
@@ -1876,10 +1933,10 @@ function calcPhysics() {
   // waterline sees its volume) and its mass sits on the surface, spread by each slice's perimeter.
   let coatV=0, coatItem=null;
   if(coat>0){
-    const per=q=>Math.PI*(3*(q.a+q.b)-Math.sqrt((3*q.a+q.b)*(q.a+3*q.b))); // ellipse perimeter (Ramanujan)
+    const per=q=>sect.perK*Math.PI*(3*(q.a+q.b)-Math.sqrt((3*q.a+q.b)*(q.a+3*q.b))); // ellipse perimeter (Ramanujan) × shape factor
     const S=slices.reduce((s,q)=>s+per(q)*q.dx,0), t=coat/EPOXY*1000/S;     // shell thickness (mm)
     let mx=0, mz=0;
-    for(const q of slices){ const w=per(q)*q.dx/S; mx+=w*q.x; mz+=w*q.zc; coatV+=Math.PI*((q.a+t)*(q.b+t)-q.a*q.b)*q.dx; q.a+=t; q.b+=t; }
+    for(const q of slices){ const w=per(q)*q.dx/S; mx+=w*q.x; mz+=w*(q.zc+q.b*sect.c0); coatV+=sect.F*((q.a+t)*(q.b+t)-q.a*q.b)*q.dx; q.a+=t; q.b+=t; }
     coatItem={m:coat, v:0, x:mx, z:mz};
   }
 
@@ -1916,7 +1973,7 @@ function calcPhysics() {
   else{buoyancyState='싱킹(S)';buoyancyColor='#f43f5e';buoyClass='S';}
 
   // Rest posture (pitch in degrees, + = nose down)
-  const rp=restPitch(slices,items.slice(1),M,cg);
+  const rp=restPitch(slices,items.slice(1),M,cg,sect);
   let pitch=null, posture;
   if(rp.pitch==='neutral') posture='중립 (복원력 없음)';
   else if(rp.pitch==='unstable') posture='불안정 (뒤집힘 위험)';
