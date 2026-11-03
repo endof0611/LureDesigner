@@ -1558,7 +1558,7 @@ function polyArea(pts) {
 // and renormalised so the widest point is still a. Areas are in units of a·b.
 // seg(t): the part below the chord u = t: area f and centroid c (in b); w(u): half-width (in a);
 // F, c0: whole area and centroid; perK: perimeter relative to an ellipse of the same a, b.
-const SECT_ELLIPSE={ellipse:true, F:Math.PI, c0:0, perK:1, seg:t=>ellipseSeg(t), w:u=>Math.sqrt(Math.max(0,1-u*u))};
+const SECT_ELLIPSE={F:Math.PI, c0:0, perK:1, seg:t=>ellipseSeg(t), w:u=>Math.sqrt(Math.max(0,1-u*u))};
 let sectCache=null;
 function sectionProfile() {
   const n=parseFloat(document.getElementById('sectNSlider').value), e=parseFloat(document.getElementById('sectESlider').value);
@@ -1731,14 +1731,13 @@ function diaRange(w, sideF, topF) {
   return f.length?{mn:f[0],mx:f[f.length-1]}:null;
 }
 // Fit weight w inside the body: the diameter moves first; if no diameter fits, the mass drops to the
-// most that fits (unless keepMass: the caller then rejects the edit). Returns a note when it changed w.
-function fitWeight(w, keepMass, sideF, topF) {
+// most that fits. Returns a note when it changed w.
+function fitWeight(w, sideF, topF) {
   if(!sideF) [sideF,topF]=bodyOutlines();
   if(weightFits(w,sideF,topF)) return ''; // already between nose and tail: its shape is left alone
   const d0=w.d, g0=w.g;
   let d=fitDia(w,w.g,sideF,topF);
   if(d===null){
-    if(keepMass) return false;
     // Largest fitting mass in 0.5 g steps (bisection: a lighter weight always fits at least as well)
     let lo=0, hi=Math.round(w.g*2)-1;
     while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2,sideF,topF)!==null) lo=m; else hi=m-1; }
@@ -1762,7 +1761,7 @@ function moveWeight(w, target) {
   return true;
 }
 function fitWeights() {
-  const [sideF,topF]=bodyOutlines(), notes=weights.map(w=>fitWeight(w,false,sideF,topF)).filter(Boolean);
+  const [sideF,topF]=bodyOutlines(), notes=weights.map(w=>fitWeight(w,sideF,topF)).filter(Boolean);
   if(notes.length) setWeightNote(notes.join(' · '));
   return notes.length>0;
 }
@@ -1799,7 +1798,7 @@ function setWeightProp(k, v) {
   if(k==='d') w.dp=v;
   // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
   if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>old?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤'); }
-  else setWeightNote(fitWeight(w,false));
+  else setWeightNote(fitWeight(w));
   syncWeightUI(); calcPhysics(); render(true);
 }
 function addWeight() {
@@ -1815,7 +1814,7 @@ function addWeight() {
     nw.pos=q; if(weightFits(nw,sideF,topF)) break;
     nw.pos=want;
   }
-  weights.push(nw); setWeightNote(fitWeight(nw,false,sideF,topF));
+  weights.push(nw); setWeightNote(fitWeight(nw,sideF,topF));
   selWeight=weights.length-1; syncWeightUI(); render();
 }
 function removeWeight() {
