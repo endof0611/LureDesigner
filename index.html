@@ -131,6 +131,17 @@
   .anim-sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:4px 0 12px}
   .anim-note{font-size:10px;color:var(--text-dim);line-height:1.5}
   .btn:disabled{opacity:0.4;cursor:default}
+  /* Measured calibration panel */
+  .calib-note{font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:8px}
+  .calib-grid{display:grid;grid-template-columns:1fr auto 88px;gap:5px 8px;align-items:center;font-size:11px}
+  .calib-grid>span:nth-child(3n+2){font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;color:var(--accent);text-align:right;line-height:1.2}
+  .calib-grid small{display:block;font-size:9px}
+  .calib-h{font-size:9px!important;color:var(--text-dim)!important;font-family:inherit!important}
+  .calib-in{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:3px 5px;font-family:inherit}
+  .calib-in:disabled{opacity:0.35}
+  .calib-row{display:flex;justify-content:space-between;gap:6px;align-items:flex-start;font-size:10px;line-height:1.5;padding:6px 0;border-top:1px solid var(--border);color:var(--text-dim)}
+  .calib-row b{color:var(--text);font-weight:600}
+  .calib-row button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:0 2px}
   @media(max-width:768px){
     .anim-dlg{width:100vw;height:100vh;height:100dvh;max-height:100dvh;border-radius:0;border:none;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
     .anim-dlg .btn{min-height:38px;padding:5px 9px}
@@ -241,13 +252,6 @@
       </div>
     </div>
     <div class="panel collapsed">
-      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">외관</div>
-      <div class="panel-body">
-      <div class="slider-group"><div class="slider-header"><span class="control-label">외곽선 두께</span><span class="slider-value" id="strokeVal">1</span></div>
-        <input type="range" min="0" max="6" value="1" step="0.5" id="strokeSlider" oninput="SW=parseFloat(this.value);document.getElementById('strokeVal').textContent=this.value;render()"></div>
-      </div>
-    </div>
-    <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">파츠 (드래그로 위치 이동)</div>
       <div class="panel-body">
       <div class="control-row"><span class="control-label">👁 눈 (<span id="eyeCount">0</span>개)</span>
@@ -266,17 +270,14 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">표시</div>
       <div class="panel-body">
       <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">그리드</span><label class="toggle"><input type="checkbox" id="gridToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
       <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
-      <div class="slider-group"><div class="slider-header"><span class="control-label">그리드 선명도</span><span class="slider-value" id="gridOpVal">10%</span></div>
-        <input type="range" min="5" max="100" value="10" id="gridOpSlider" oninput="document.getElementById('gridOpVal').textContent=this.value+'%';render()"></div>
       </div>
     </div>
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">물리 설정</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">소재 밀도 (g/cm³)</span><span class="slider-value" id="densityVal">0.50</span></div>
-        <input type="range" min="0.1" max="2.0" value="0.5" step="0.05" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
+        <input type="range" min="0.1" max="2.0" value="0.5" step="0.01" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트</span><span class="slider-value" id="weightSum">-</span></div>
         <div class="seg" id="weightTabs" style="flex-wrap:wrap"></div>
@@ -319,6 +320,29 @@
         <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--text-dim)" id="phComment">형태를 수정하면 자동으로 예측됩니다</div>
       </div>
       <button class="btn btn-accent" onclick="toggleAnimation()" style="width:100%;justify-content:center;margin-top:10px" id="animBtn">▶ 액션 미리보기</button>
+      </div>
+    </div>
+    <div class="panel collapsed" id="calibPanel">
+      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed');calibUI()">🎯 실측 보정</div>
+      <div class="panel-body">
+      <div class="calib-note">지금 디자인과 같은 실물 루어를 재서 아는 값만 입력하세요(빈칸은 건너뜀). 저장하면 실측 ÷ 예측 비율이 기록되고, 기록들의 평균이 모든 디자인의 예측에 곱해집니다.</div>
+      <div class="calib-grid">
+        <span class="calib-h">항목</span><span class="calib-h">예측</span><span class="calib-h">실측</span>
+        <span>무게 (g)</span><span id="calMp">-</span><input type="number" step="0.1" min="0" id="calM" class="calib-in" oninput="calibUI()">
+        <span>정지 자세 (°)</span><span id="calPp">-</span><span style="display:flex;gap:2px"><select id="calPDir" class="calib-in" style="width:48px;padding:0 2px" onchange="calibUI()"><option value="-1">꼬리</option><option value="1">머리</option></select><input type="number" step="1" min="0" max="90" id="calP" class="calib-in" style="width:38px" oninput="calibUI()"></span>
+        <span id="calVl">침강·부상 (cm/s)</span><span id="calVp">-</span><input type="number" step="1" min="0" id="calV" class="calib-in" oninput="calibUI()">
+        <span id="calDl">잠행 깊이 (m)</span><span id="calDp">-</span><input type="number" step="0.05" min="0" id="calD" class="calib-in" oninput="calibUI()">
+        <span id="calWl">워블 (Hz)</span><span id="calWp">-</span><input type="number" step="0.1" min="0" id="calW" class="calib-in" oninput="calibUI()">
+        <span>비거리 (m)</span><span id="calCp">-</span><input type="number" step="1" min="0" id="calC" class="calib-in" oninput="calibUI()">
+      </div>
+      <div style="display:flex;gap:4px;margin-top:8px">
+        <button class="btn btn-accent" style="flex:1;justify-content:center" onclick="calibAdd()">측정값 저장</button>
+        <button class="btn" style="flex:1;justify-content:center" onclick="calibFitDensity()">밀도로 무게 맞추기</button>
+      </div>
+      <div id="calibMsg" class="calib-note" style="color:#f59e0b;margin-top:6px"></div>
+      <div class="control-row" style="margin-top:8px"><span class="control-label">보정 적용</span><label class="toggle"><input type="checkbox" id="calibToggle" checked onchange="calib.on=this.checked;calibSave();calcPhysics()"><span class="toggle-slider"></span></label></div>
+      <div id="calibFactors" class="calib-note"></div>
+      <div id="calibList"></div>
       </div>
     </div>
   </div>
@@ -420,7 +444,8 @@
 // mirrored half is written back into the array, so the stored points
 // always match what is displayed, exported and used for physics.
 let sidePts = [], topPts = [];
-let SM = 1, SW = 1;
+let SM = 1;
+const SW = 1.5; // outline width (px on screen)
 const FC = '#ffffff', SC = '#000000';
 const MIN_PTS = 8, MAX_PTS = 32; // same as the point-count sliders
 const HAS_TOUCH = ('ontouchstart' in window);
@@ -1037,10 +1062,10 @@ function renderView(which) {
 
   let html = '';
 
-  // Grid - 1mm minor, 10mm (1cm) major, anchored at nose. Drawn with tiled patterns
-  // instead of one <line> per grid line.
-  if(document.getElementById('gridToggle').checked){
-    const gOp=parseInt(document.getElementById('gridOpSlider').value)/100;
+  // Grid (always shown, full strength) - 1mm minor, 10mm (1cm) major, anchored at nose. Drawn with tiled
+  // patterns instead of one <line> per grid line.
+  {
+    const gOp=1;
     const noseSX=cx+mxx*zoom;
     let defs='', fills='';
     const grid=(id,size,sw,op)=>{
@@ -1062,9 +1087,8 @@ function renderView(which) {
 
   // Body
   const dp=pts.map(p=>({x:cx+p.x*zoom, y:cy+p.y*zoom}));
-  // Half-transparent fill while the grid is on, so the mm grid can be read inside the body too
-  const gridOn=document.getElementById('gridToggle').checked;
-  html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'"'+(gridOn?' fill-opacity="0.45"':'')+' stroke="'+SC+'" stroke-width="'+SW+'"/>';
+  // Half-transparent fill, so the mm grid can be read inside the body too
+  html+='<path d="'+smoothPath(dp,SM)+'" fill="'+FC+'" fill-opacity="0.45" stroke="'+SC+'" stroke-width="'+SW+'"/>';
 
   // Internal weights (draggable in the side view); the one the sliders edit is outlined when there are several
   const sideF=isSide?flattenSmooth(pts,SM,12):[];
@@ -1185,7 +1209,8 @@ function setupEvents() {
 
     svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render(true);}, {passive:false});
   });
-  const NOT_LURE=new Set(['gridToggle','showPtsToggle','gridOpSlider','strokeSlider','speedSlider','cgToggle','propToggle']);
+  const NOT_LURE=new Set(['showPtsToggle','speedSlider','cgToggle','propToggle',
+    'calM','calP','calPDir','calV','calD','calW','calC','calibToggle']);
   // Sliders: 'input'. Checkboxes: 'change', which bubbles here after their own onchange (and its undo step)
   const markDirty=e=>{ if(e.target.id && !NOT_LURE.has(e.target.id)){ presetDirty=true; render(true); } };
   const sb=document.getElementById('sidebar');
@@ -1443,10 +1468,10 @@ function exportSVG() {
 function printLure() {
   const M=8, BAR=50, {w,h,inner,noseX,sideY,topY,split}=buildLureSVG(M,0.3);
   const H=r2(h+16), by=r2(h+4); // scale bar and label below the drawing (and its grid)
-  // mm grid as in the editor (1 mm / 10 mm from the nose and the centre line), when the grid is on.
+  // mm grid as in the editor (1 mm / 10 mm from the nose and the centre line).
   // The body is left unfilled so the grid shows through it for measuring.
   let grid='';
-  if(document.getElementById('gridToggle').checked){
+  {
     const pat=(id,y0)=>['m','c'].map(k=>{ const sz=k==='m'?1:10;
       return '<pattern id="'+k+id+'" width="'+sz+'" height="'+sz+'" patternUnits="userSpaceOnUse" x="'+r2(noseX-sz/2)+'" y="'+r2(y0-sz/2)+'">'+
         '<path d="M '+sz/2+' 0 V '+sz+' M 0 '+sz/2+' H '+sz+'" fill="none" stroke="'+(k==='m'?'#d4d4d4':'#8a8a8a')+'" stroke-width="'+(k==='m'?0.08:0.15)+'"/></pattern>'; }).join('');
@@ -1901,6 +1926,91 @@ function actionText(a, tech) {
   return T[a.type][tech];
 }
 
+// === MEASURED CALIBRATION ===
+// The user's measurements of real lures, kept in this browser. Each sample stores measured ÷ predicted ratios
+// for the empirical parts of the model (lip running depth, pencil jerk dive, sink/rise rate, wobble, cast);
+// the geometric mean of each ratio over all samples scales those predictions for every design. Mass and rest
+// posture are physics of the inputs: a mismatch there means this lure's inputs differ (density, weights), so
+// they are only compared (and the density can be fitted to the measured mass).
+const CAL_KEY='lureDesigner.calib';
+const CAL_NAMES={lipDepth:'립 잠행 깊이', pencilDive:'펜슬 저크 잠수', sink:'침강·부상 속도', wobble:'워블 주기', cast:'비거리'};
+let calib={on:true, samples:[]};
+try{ const c=JSON.parse(localStorage.getItem(CAL_KEY)); if(c && Array.isArray(c.samples)) calib={on:c.on!==false, samples:c.samples.filter(x=>x&&x.r)}; }catch(e){}
+function calibSave(){ try{ localStorage.setItem(CAL_KEY,JSON.stringify(calib)); }catch(e){} }
+function calibFactors(){
+  const f={};
+  for(const k in CAL_NAMES){
+    const r=calib.samples.map(x=>x.r[k]).filter(x=>x>0), g=r.length?Math.exp(r.reduce((a,x)=>a+Math.log(x),0)/r.length):1;
+    f[k]={n:r.length, g, v:calib.on?g:1}; // g: mean of the measurements, v: what is applied
+  }
+  return f;
+}
+// Measured values typed into the panel (NaN when empty)
+function calibInputs(){
+  const v=id=>{ const e=document.getElementById(id); return e.disabled||e.value===''?NaN:parseFloat(e.value); };
+  return {M:v('calM'), P:v('calP')*parseFloat(document.getElementById('calPDir').value), V:v('calV'), D:v('calD'), W:v('calW'), C:v('calC')};
+}
+function calibUI(){
+  const panel=document.getElementById('calibPanel');
+  if(!lastPhys || !lastPhys.raw || !panel || panel.classList.contains('collapsed')) return;
+  const r=lastPhys.raw, CF=r.CF, set=(id,h)=>document.getElementById(id).innerHTML=h;
+  const dis=(id,off)=>{ document.getElementById(id).disabled=off; };
+  // Which measurements apply to this lure, set before the inputs are read
+  dis('calV',r.kind==='SP'); dis('calD',!r.depthKind); dis('calW',!r.wobble);
+  const m=calibInputs();
+  // Predicted value (with calibration applied) and, once a measurement is typed, the difference
+  const cell=(pred,meas,dig,unit)=>pred===null?'-':pred.toFixed(dig)+(isNaN(meas)?'':'<small style="color:'+(Math.abs(meas-pred)<=Math.max(Math.abs(pred)*0.05,0.5*Math.pow(10,-dig))?'#10b981':'#f59e0b')+'">'+(meas>=pred?'+':'−')+Math.abs(meas-pred).toFixed(dig)+unit+'</small>');
+  set('calMp',cell(r.M,m.M,1,''));
+  const pp=r.pitch===null?null:r.pitch;
+  set('calPp',pp===null?'-':(Math.abs(pp)<0.5?'수평':(pp>0?'머리 ':'꼬리 ')+Math.abs(pp).toFixed(0))+(isNaN(m.P)||pp===null?'':'<small style="color:'+(Math.abs(m.P-pp)<=5?'#10b981':'#f59e0b')+'">'+Math.abs(m.P-pp).toFixed(0)+'° 차</small>'));
+  const vOk=r.kind!=='SP';
+  set('calVl',r.kind==='S'?'침강 속도 (cm/s)':r.kind==='F'?'부상 속도 (cm/s)':'침강·부상 (서스펜딩)');
+  set('calVp',vOk?cell(r.freeV*CF.sink.v*100,m.V,0,''):'-');
+  const sp=['','느림','느림-중','보통','빠름','매우빠름'][r.speed];
+  set('calDl',r.depthKind==='lipDepth'?'잠행 깊이 (m, '+sp+')':r.depthKind==='pencilDive'?'저크 잠수 깊이 (m)':'깊이 (해당 없음)');
+  set('calDp',r.depthKind?cell(r.depth*CF[r.depthKind].v,m.D,2,''):'-');
+  set('calWl',r.wobble?'워블 (Hz, '+sp+')':'워블 (해당 없음)');
+  set('calWp',r.wobble?cell(r.wobble*CF.wobble.v,m.W,1,''):'-');
+  set('calCp',cell(r.cast*CF.cast.v,m.C,0,''));
+  // Active factors and the saved samples
+  const act=Object.keys(CAL_NAMES).filter(k=>CF[k].n);
+  set('calibFactors',act.length?'적용 중인 보정'+(calib.on?'':' (꺼짐)')+': '+act.map(k=>CAL_NAMES[k]+' <b style="color:var(--accent)">×'+CF[k].g.toFixed(2)+'</b> ('+CF[k].n+'개)').join(' · '):'저장된 측정값이 없습니다. 보정 없이 모델 그대로 예측합니다.');
+  document.getElementById('calibToggle').checked=calib.on;
+  set('calibList',calib.samples.map((x,i)=>{
+    const d=new Date(x.t), items=[];
+    if(x.m.M) items.push('무게 '+x.p.M.toFixed(1)+'→'+x.m.M+'g');
+    if(!isNaN(x.m.P)&&x.m.P!==null) items.push('자세 '+(x.p.pitch===null?'-':x.p.pitch.toFixed(0))+'→'+x.m.P+'°');
+    for(const k in x.r) items.push(CAL_NAMES[k]+' ×'+x.r[k].toFixed(2));
+    return '<div class="calib-row"><span><b>'+x.label+'</b> · '+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+items.join(' · ')+'</span><button title="삭제" onclick="calibDel('+i+')">✕</button></div>';
+  }).join(''));
+}
+function calibAdd(){
+  calibUI();
+  const r=lastPhys&&lastPhys.raw, m=calibInputs(), msg=t=>document.getElementById('calibMsg').textContent=t;
+  if(!r) return;
+  const ratio={};
+  if(r.freeV>0 && m.V>0) ratio.sink=m.V/100/r.freeV;
+  if(r.depthKind && r.depth>0 && m.D>0) ratio[r.depthKind]=m.D/r.depth;
+  if(r.wobble>0 && m.W>0) ratio.wobble=m.W/r.wobble;
+  if(r.cast>0 && m.C>0) ratio.cast=m.C/r.cast;
+  if(!Object.keys(ratio).length && !(m.M>0) && isNaN(m.P)){ msg('입력한 측정값이 없습니다.'); return; }
+  calib.samples.push({t:Date.now(), label:r.label, type:r.type, speed:r.speed, r:ratio,
+    m:{M:m.M>0?m.M:null, P:isNaN(m.P)?null:m.P}, p:{M:r.M, pitch:r.pitch}});
+  calibSave(); calcPhysics();
+  const ks=Object.keys(ratio);
+  msg(ks.length?'저장했습니다: '+ks.map(k=>CAL_NAMES[k]+' ×'+ratio[k].toFixed(2)).join(', ')+'. 예측에 반영됐습니다.':'저장했습니다 (무게·자세는 비교 기록만 하고 보정 계수에는 쓰지 않습니다).');
+}
+function calibDel(i){ calib.samples.splice(i,1); calibSave(); calcPhysics(); }
+// Set the body density so the predicted total mass equals the measured one
+function calibFitDensity(){
+  const r=lastPhys&&lastPhys.raw, m=calibInputs(), msg=t=>document.getElementById('calibMsg').textContent=t;
+  if(!r || !(m.M>0)){ msg('먼저 실측 무게를 입력하세요.'); return; }
+  const rho=Math.round((r.density+(m.M-r.M)/r.dMdRho)*100)/100;
+  if(!(rho>=0.1 && rho<=2)){ msg('밀도 '+rho.toFixed(2)+'이 필요해 범위(0.10~2.00)를 벗어납니다. 웨이트·훅 무게를 먼저 확인하세요.'); return; }
+  saveH(); setCtl('density',rho); presetDirty=true; calcPhysics(); render();
+  msg('소재 밀도를 '+r.density.toFixed(2)+' → '+rho.toFixed(2)+'로 바꿔 예측 무게를 '+lastPhys.raw.M.toFixed(1)+'g으로 맞췄습니다.');
+}
+
 let lastPhys=null;
 function calcPhysics() {
   // Get dimensions in mm
@@ -1994,26 +2104,32 @@ function calcPhysics() {
     if(pitch!==null) depth*=1+Math.max(-20,Math.min(20,pitch))*0.01; // nose-down helps the lip bite
     depth=Math.max(0,Math.min(depth,8));
   }
+  // Measured calibration: factors from the user's measurements scale the empirical predictions
+  const CF=calibFactors(), rawDepth=depth;
+  if(lip.on) depth=Math.min(8,depth*CF.lipDepth.v);
   // Sink / rise rate: net weight or buoyancy against drag in the rest posture. Level, the lure falls
   // broadside (Cd≈1 on the top-view area); tilted, the broadside area shrinks with cos θ and the end-on
   // cross-section (Cd≈0.3, streamlined) takes over with sin θ, so a tilted lure sinks or rises faster.
   const th=(pitch===null?0:pitch)*Math.PI/180;
   const CdA=(1.0*polyArea(top)*Math.abs(Math.cos(th))+0.3*aMax*Math.abs(Math.sin(th)))*1e-6; // m²
-  const freeV=Math.sqrt(2*Math.abs(M-V*WATER)/1000*9.81/(1000*WATER*CdA));
+  const freeVraw=Math.sqrt(2*Math.abs(M-V*WATER)/1000*9.81/(1000*WATER*CdA)), freeV=freeVraw*CF.sink.v;
   const sinkRate=buoyClass==='S'?freeV:0, riseRate=buoyClass==='F'?freeV:0;
 
   // Wobble amplitude from H/L; frequency ~ speed / body height (Strouhal-like, St≈0.2)
   const hlRatio=H/L;
-  const wobbleHz=0.2*SPEED_MS[speed]/(H/1000);
+  const wobbleRaw=0.2*SPEED_MS[speed]/(H/1000), wobbleHz=wobbleRaw*CF.wobble.v;
   const type=classifyLure(lip.on,buoyClass,pitch,L,H);
   const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,
     mass:M, vol:V, area:aMax, arm:Math.hypot(cg.x-rp.cb.x, cg.z-rp.cb.z), topArea:polyArea(top), gm:rp.gm});
+  const rawDive=act.diveDepth;
+  if(type==='divingPencil') act.diveDepth*=CF.pencilDive.v;
   const lt=LURE_TYPES[type];
   let depthText;
   if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
   else if(type==='divingPencil') depthText='저크 시 약 '+act.diveDepth.toFixed(1)+' m 잠수 (정지 시 부상)';
   else if(type==='topPencil'||type==='popper') depthText='수면';
   else depthText=buoyClass==='S'?'침강 '+(sinkRate*100).toFixed(0)+' cm/s':buoyClass==='SP'?'정지 수심 유지':'표층 약 '+act.runDepth.toFixed(1)+' m';
+  if((lip.on&&CF.lipDepth.v!==1) || (type==='divingPencil'&&CF.pencilDive.v!==1) || (!lip.on&&type!=='divingPencil'&&buoyClass==='S'&&CF.sink.v!==1)) depthText+=' · 보정';
   let wobbleType,wobbleWidth;
   if(hlRatio>0.45){wobbleType='와이드 워블';wobbleWidth='넓음';}
   else if(hlRatio>0.3){wobbleType='미디엄 워블';wobbleWidth='중간';}
@@ -2033,7 +2149,7 @@ function calcPhysics() {
   // CG toward the nose → lip and tail catch air and the lure tumbles.
   const cgFromNose=(sx.mx-cg.x)/L;
   const Cd=Math.max(0.35,Math.min(0.65,0.38+0.6*(0.5-cgFromNose)))+(lip.on?0.05:0);
-  const castM=castRange(totalWeight,Cd*aMax/100);
+  const castRaw=castRange(totalWeight,Cd*aMax/100), castM=castRaw*CF.cast.v;
   const castDist=castM>=55?'장거리':castM>=40?'중거리':'단거리';
 
   // Comment follows the computed rest posture, plus the weight's effect on casting
@@ -2068,11 +2184,18 @@ function calcPhysics() {
     sinkingPencil:'S자 슬라이드 + 롤링', vibe:'고속 진동 · 약 '+act.wobHz.toFixed(0)+' Hz'}[type]||wobbleType+' · '+wobbleWidth+' · 약 '+wobbleHz.toFixed(1)+' Hz');
   set('phRoll',rollType+' · '+rollStab+' (GM '+rp.gm.toFixed(1)+' mm)');
   document.getElementById('phRoll').style.color=rp.gm<=0?'#f43f5e':'var(--accent)';
-  set('phCast',castDist+' (약 '+castM.toFixed(0)+' m)');
+  set('phCast',castDist+' (약 '+castM.toFixed(0)+' m)'+(CF.cast.v!==1?' · 보정':''));
   set('phComment',comment);
 
   // Store for animation
   lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act};
+  // Uncalibrated model values for the calibration panel (ratios are always taken against these)
+  const wobbles=lip.on||type==='liplessMinnow'||type==='vibe';
+  lastPhys.raw={M:totalWeight, pitch, kind:buoyClass, type, speed, density, label:presetName(),
+    freeV:buoyClass==='SP'?0:freeVraw, depthKind:lip.on?'lipDepth':type==='divingPencil'?'pencilDive':null,
+    depth:lip.on?rawDepth:type==='divingPencil'?rawDive:0, wobble:wobbles?(type==='vibe'?1.8:1)*wobbleRaw:0, cast:castRaw,
+    dMdRho:vol_cm3-weights.reduce((s,w)=>s+w.g/LEAD,0)-hardware/STEEL, CF};
+  calibUI();
   // Slider-driven recalculation outside a render: refresh the CG/CB markers
   if(!inRender && document.getElementById('cgToggle').checked) render(true);
 }
