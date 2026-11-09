@@ -297,6 +297,15 @@
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">코팅은 바디 표면에 고르게 (에폭시 1.15 g/cm³, 부피만큼 부력 증가) · 부속은 바디 중심축을 따라 고르게 (바디 안이라 부피 추가 없음) · 바닷물 기준</span></div>
       </div>
     </div>
+    <div class="panel collapsed">
+      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">화면 설정 (대칭 · 표시)</div>
+      <div class="panel-body">
+      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
+      </div>
+    </div>
     <div class="panel collapsed" id="physicsResult">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">📊 액션 예측</div>
       <div class="panel-body">
@@ -338,15 +347,6 @@
       <div class="control-row" style="margin-top:8px"><span class="control-label">보정 적용</span><label class="toggle"><input type="checkbox" id="calibToggle" checked onchange="calib.on=this.checked;calibSave();calcPhysics()"><span class="toggle-slider"></span></label></div>
       <div id="calibFactors" class="calib-note"></div>
       <div id="calibList"></div>
-      </div>
-    </div>
-    <div class="panel collapsed">
-      <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">화면 설정 (대칭 · 표시)</div>
-      <div class="panel-body">
-      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
       </div>
     </div>
   </div>
