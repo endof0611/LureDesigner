@@ -217,7 +217,7 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">바디 형태</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
-        <input type="range" min="40" max="250" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
+        <input type="range" min="40" max="266" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
       <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">측면 높이 (mm)</span><span class="slider-value" id="sideHVal">44</span></div>
         <input type="range" min="8" max="80" value="44" id="sideHSlider" oninput="scaleSideHeight(this.value)"></div>
@@ -880,7 +880,7 @@ function scaleTopWidth(v) {
 
 // Length × height × width (mm) of the drawn outline
 function lureSize() { const s=drawnRange('side'), t=drawnRange('top'); return [s.x.mx-s.x.mn, s.y.mx-s.y.mn, t.y.mx-t.y.mn]; }
-// From the outline itself: the sliders clamp to their ranges (e.g. length 40-250 mm)
+// From the outline itself: the sliders clamp to their ranges (e.g. length 40-266 mm, the longest that prints 1:1 on A4)
 function updateSizeInfo() { document.getElementById('sizeInfo').textContent=lureSize().map(Math.round).join(' × ')+' mm'; drawSection(); }
 
 // Force both views to have identical X range (length):
@@ -1441,7 +1441,8 @@ function onUp(){
 // === EXPORT ===
 // One valid SVG document: side view (body, lip, parts) on top, top view below. Units are the editor's mm.
 // Side view (body, weight, lip, parts) above the top view, in mm. M = margin, sw = outline width (mm)
-function buildLureSVG(M, sw) {
+// MX: left/right margin (defaults to M, the top/bottom margin)
+function buildLureSVG(M, sw, MX=M) {
   const GAP=20;
   const bbox=pts=>{ const x=xRange(pts), y=yRange(pts); return {x1:x.mn,y1:y.mn,w:x.mx-x.mn,h:y.mx-y.mn}; };
   const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
@@ -1466,14 +1467,14 @@ function buildLureSVG(M, sw) {
   });
   const sb=bbox(sideExtent), tb=bbox(topPts);
   // One X origin for both views so nose and tail line up vertically, as in the editor
-  const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+M*2), h=r2(sb.h+tb.h+GAP+M*2);
+  const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+MX*2), h=r2(sb.h+tb.h+GAP+M*2);
   const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+sw+'"/>';
   const parts=partsMarkup(0,0,1,false), code=designCode();
-  const inner='  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
+  const inner='  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(MX-x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
     (parts?'\n    '+parts:'')+designCodeMarkup(code,sideF)+'\n  </g>\n'+
-    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>';
+    '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(MX-x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>';
   // Drawing coordinates of the nose X, the side/top centre lines and the split between the two views
-  return {w, h, inner, code, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
+  return {w, h, inner, code, noseX:r2(MX-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
 }
 // Design code written on the lure in prints and exports:
 // [preset code]/[buoyancy F/SF/SP/SS/S]/L[length mm]/W[mass g]/B[width mm]/H[height mm], all rounded, e.g. MN001/F/L125/W16/B14/H19
@@ -1517,7 +1518,8 @@ function exportSVG() {
 
 // Actual-size print: the SVG is sized in mm (1 unit = 1 mm), with a 50 mm scale bar to check the printer scale
 function printLure() {
-  const M=8, BAR=50, {w,h,inner,code,noseX,sideY,topY,split}=buildLureSVG(M,0.3);
+  // 8 mm above/below the drawing (cm numbers, scale bar, label), 2 mm left/right so long lures fit the paper
+  const M=8, MX=2, BAR=50, {w,h,inner,code,noseX,sideY,topY,split}=buildLureSVG(M,0.3,MX);
   const H=r2(h+16), by=r2(h+4); // scale bar and label below the drawing (and its grid)
   // mm grid as in the editor (1 mm / 10 mm from the nose and the centre line).
   // The body is left unfilled so the grid shows through it for measuring.
@@ -1535,18 +1537,18 @@ function printLure() {
   }
   const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
   // The page is as wide as the drawing or the label line, whichever is longer (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em)
-  const W=Math.max(w, r2(2*M+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
+  const W=Math.max(w, r2(2*MX+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
   const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
   const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+grid+'\n'+body+
-    '\n  <path d="M '+M+' '+(by-2)+' V '+(by+2)+' M '+M+' '+by+' H '+(M+BAR)+' M '+(M+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
-    '\n  <text x="'+(M+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
-    '\n  <text x="'+M+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
+    '\n  <path d="M '+MX+' '+(by-2)+' V '+(by+2)+' M '+MX+' '+by+' H '+(MX+BAR)+' M '+(MX+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
+    '\n  <text x="'+(MX+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
+    '\n  <text x="'+MX+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
   // Hairline strokes on paper (the on-screen widths would be up to 1.5 mm thick)
   document.getElementById('printArea').innerHTML=svg.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"');
-  // Smallest page that holds the drawing at 1:1 with 10 mm margins (A4 portrait / landscape, then A3)
-  const fits=(pw,ph)=>W<=pw-20&&H<=ph-20;
+  // Smallest page that holds the drawing at 1:1 with 5 mm margins (A4 portrait / landscape, then A3)
+  const fits=(pw,ph)=>W<=pw-10&&H<=ph-10;
   const page=fits(210,297)?'A4 portrait':fits(297,210)?'A4 landscape':fits(297,420)?'A3 portrait':'A3 landscape';
-  document.getElementById('printPage').textContent='@page{size:'+page+';margin:10mm}';
+  document.getElementById('printPage').textContent='@page{size:'+page+';margin:5mm}';
   if(!fits(297,210) && !fits(210,297)) alert('실제 크기가 A4보다 커서 '+page.replace(' portrait',' 세로').replace(' landscape',' 가로')+' 용지로 설정됩니다.'+(fits(420,297)||fits(297,420)?'':' A3에도 다 들어가지 않아 일부가 잘릴 수 있습니다.'));
   window.print();
 }
