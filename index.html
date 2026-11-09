@@ -1885,9 +1885,9 @@ function castRange(massG, CdA_cm2) {
 // === ACTION MODEL ===
 // Lure type from the shape and the physics, the techniques that suit it, and the parameters the
 // preview animates. These are tendencies from shape, buoyancy and balance, not a fluid simulation.
-const TECH_NAMES={retrieve:'리트리브', jerk:'저크 & 포즈', twitch:'트위칭', walk:'도그워크', pop:'팝핑', liftfall:'리프트 & 폴', stopgo:'스톱 & 고'};
+const TECH_NAMES={retrieve:'리트리브', jerk:'저크 & 포즈', sweep:'롱 스위핑', twitch:'트위칭', walk:'도그워크', pop:'팝핑', liftfall:'리프트 & 폴', stopgo:'스톱 & 고'};
 const LURE_TYPES={
-  divingPencil:{name:'다이빙 펜슬', techs:['jerk','retrieve']},
+  divingPencil:{name:'다이빙 펜슬', techs:['sweep','jerk','retrieve']}, // long sweep: the basic big-game technique
   topPencil:{name:'톱워터 펜슬', techs:['walk','retrieve']},
   popper:{name:'포퍼', techs:['pop','walk']},
   liplessMinnow:{name:'립리스 미노우', techs:['retrieve','twitch']},
@@ -1944,6 +1944,7 @@ function actionParams(o) {
     // and the harder the jerk (speed setting)
     const tilt=Math.max(0,Math.min(70,-rest))/70;
     a.diveDepth=Math.max(0.15,Math.min(1.5,(0.2+0.8*tilt)*Math.sqrt(L/200)*(0.7+0.3*buoyancyRatio)*(0.7+0.3*rodV/0.8)));
+    a.sweepDepth=Math.min(2,a.diveDepth*1.6); // a long, steady sweep keeps pulling it down for longer than a short jerk
     Object.assign(a,{runDepth:0.15, swimPitch:rest*0.25, wobHz:1.5, yawAmp:3, rollAmp:wh>0.8?35:25, dartYaw:wh>0.8?20:30, diveRate:1.2, twitchDepth:0.3});
   }
   a.rollAmp*=rollK;
@@ -1956,7 +1957,9 @@ function actionText(a, tech) {
   const m=v=>v.toFixed(1)+' m', cms=v=>(v*100).toFixed(0)+' cm/s';
   const stop=a.freeRate<0?'떠오름 (약 '+cms(a.riseRate)+')':a.freeRate>0?'가라앉음 (약 '+cms(a.sinkRate)+')':'그 수심에 멈춤';
   const T={
-    divingPencil:{jerk:'저크하면 머리부터 약 '+m(a.diveDepth)+' 잠수하며 롤링·좌우 다팅, 포즈에서 꼬리 숙인 자세로 '+stop+
+    divingPencil:{sweep:'로드를 길고 천천히 쓸어 당기면 약 '+m(a.sweepDepth??a.diveDepth)+'까지 잠수하며 크게 롤링·좌우 S자로 헤엄, 포즈에서 꼬리 숙인 자세로 '+stop+
+        (a.restPitch>-12?'. 무게중심이 앞쪽이라 잠수가 얕고 수면 아래를 길게 미끄러지는 액션 위주':''),
+      jerk:'저크하면 머리부터 약 '+m(a.diveDepth)+' 잠수하며 롤링·좌우 다팅, 포즈에서 꼬리 숙인 자세로 '+stop+
         (a.restPitch>-12?'. 무게중심이 앞쪽이라 잠수가 얕고 수면 아래를 미끄러지는 액션 위주':''),
       retrieve:'천천히 감으면 수면 바로 아래에서 롤링하며 S자로 헤엄'},
     topPencil:{walk:'로드를 짧고 리듬 있게 치면 머리를 좌우로 번갈아 트는 도그워크', retrieve:'그냥 감으면 수면을 미끄러지며 직진 (액션 약함)'},
@@ -2169,7 +2172,7 @@ function calcPhysics() {
   const act=actionParams({type,lip,buoyClass,pitch,L,H,W,depth,sinkRate,riseRate,wobbleHz,buoyancyRatio,speed,
     mass:M, vol:V, area:aMax, arm:Math.hypot(cg.x-rp.cb.x, cg.z-rp.cb.z), topArea:polyArea(top), gm:rp.gm});
   const rawDive=act.diveDepth;
-  if(type==='divingPencil') act.diveDepth*=CF.pencilDive.v;
+  if(type==='divingPencil'){ act.diveDepth*=CF.pencilDive.v; act.sweepDepth*=CF.pencilDive.v; }
   const lt=LURE_TYPES[type];
   let depthText;
   if(lip.on) depthText=depth.toFixed(1)+' m'+(buoyClass==='S'?' (정지 시 침강)':buoyClass==='SP'?' (정지 시 유지)':' (정지 시 부상)');
@@ -2384,13 +2387,13 @@ function animStop(){
 function animFrame(){
   animPause();
   for(let i=0;i<4;i++) animStep(sim,lastPhys.act,animTech,1/120,animOpt);
-  drawAnimation();
+  drawAnimation(); animHud(true); // numbers follow every step, however fast the button is pressed
 }
 function animReset(){ sim=newSim(lastPhys.act,animTech,true,animOpt); animHud(true); }
 
 function newSim(a,tech,live,opt){
   const dpw=Math.min(1.5,Math.pow(opt.power,0.7));
-  const reach={jerk:a.diveDepth*dpw, twitch:a.twitchDepth*dpw, liftfall:a.bottom}[tech]??(a.surface?0:a.runDepth);
+  const reach={jerk:a.diveDepth*dpw, sweep:(a.sweepDepth??a.diveDepth)*dpw, twitch:a.twitchDepth*dpw, liftfall:a.bottom}[tech]??(a.surface?0:a.runDepth);
   const shown=Math.min(3,Math.max(0.8,Math.max(reach,a.startDepth)*1.3+0.2)); // metres shown below the surface
   return {live, shown, nose:xRange(sidePts).mx/1000, t:0, x:0, lat:0, d:a.startDepth, v:0, vd:0, head:0, yaw:0,
     pitch:a.restPitch, pv:0, roll:0, ph:0, hz:0, phase:'go', phaseT:0, n:0, k:-1, maxD:a.startDepth, peakV:0,
@@ -2443,6 +2446,20 @@ function animStep(s,a,tech,dt,opt){
       vT=0; slack=true; headT=s.head; pitchT=a.restPitch;
       const up=a.freeRate<0 && s.d>0.01;
       if(s.phaseT>=(up?3:P) || (a.freeRate<0 && !up && s.phaseT>=Math.min(P,0.4))){ s.phase='go'; s.phaseT=0; s.n++; animRing(s); }
+    }
+  }
+  else if(tech==='sweep'){
+    // Long sweep: a slow ~1.6 s pull drags the pencil deep in wide rolling S-turns; then slack as after a jerk
+    const S=1.6, P=1.4*ps;
+    if(s.phase==='go'){
+      vT=a.rodV*1.8*pw; dT=(a.sweepDepth??a.diveDepth)*dpw; dRate=a.diveRate*0.7;
+      headT=0; yawO=slow(0.9,a.dartYaw*0.7*Math.min(1.4,pw)); rollT=slow(1.8,a.rollAmp*1.3);
+      pitchT=dT>s.d+0.03?a.divePitch*0.8:a.swimPitch;
+      if(s.phaseT>=S){ s.phase='pause'; s.phaseT=0; }
+    } else {
+      vT=0; slack=true; headT=s.head; pitchT=a.restPitch;
+      const up=a.freeRate<0 && s.d>0.01;
+      if(s.phaseT>=(up?3.5:P) || (a.freeRate<0 && !up && s.phaseT>=Math.min(P,0.4))){ s.phase='go'; s.phaseT=0; s.n++; animRing(s); }
     }
   }
   else if(tech==='walk'){
