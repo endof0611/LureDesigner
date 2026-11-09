@@ -1463,12 +1463,12 @@ function buildLureSVG(M, sw) {
   return {w, h, inner, code, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
 }
 // Design code written on the lure in prints and exports:
-// [preset code]/[buoyancy F/SF/SP/SS/S]/[length]mm/[mass]g/[width]mm/[height]mm, e.g. MN001/F/125mm/16.1g/14mm/19mm
+// [preset code]/[buoyancy F/SF/SP/SS/S]/L[length mm]/W[mass g]/B[width mm]/H[height mm], e.g. MN001/F/L125/W16.1/B14/H19
 function designCode() {
   calcPhysics();
   if(!lastPhys || !lastPhys.raw) return '';
   const [L,H,W]=lureSize(), g=lastPhys.raw.M.toFixed(1).replace(/\.0$/,'');
-  return PRESETS[currentPreset.cat].items[currentPreset.key].name+'/'+lastPhys.buoyCode+'/'+Math.round(L)+'mm/'+g+'g/'+Math.round(W)+'mm/'+Math.round(H)+'mm';
+  return PRESETS[currentPreset.cat].items[currentPreset.key].name+'/'+lastPhys.buoyCode+'/L'+Math.round(L)+'/W'+g+'/B'+Math.round(W)+'/H'+Math.round(H);
 }
 // The code as SVG text inside the side-view body: the largest size (up to 3 mm) whose whole box stays inside
 // the outline with a margin and clear of the eyes, as near the middle of the length as possible. A body too
