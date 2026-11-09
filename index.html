@@ -131,6 +131,12 @@
   .anim-sliders{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:4px 0 12px}
   .anim-note{font-size:10px;color:var(--text-dim);line-height:1.5}
   .btn:disabled{opacity:0.4;cursor:default}
+  .rec-box{margin-top:8px;padding:8px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow)}
+  .rec-why{font-size:10px;color:var(--text-dim);line-height:1.55;margin-top:4px}
+  .rec-title{font-size:10px;color:var(--text-dim)}
+  .rec-main{font-size:13px;font-weight:600;color:var(--accent);margin-top:2px}
+  #physicsOutput .control-row>span:first-child{white-space:nowrap;margin-right:10px} /* item names never wrap */
+  #physicsOutput .control-row>span:last-child{text-align:right}
   details.adv{margin-top:12px;border-top:1px solid var(--border);padding-top:8px}
   details.adv summary{font-size:11px;color:var(--text-dim);cursor:pointer;margin-bottom:8px;user-select:none;-webkit-user-select:none}
   /* Measured calibration panel */
@@ -310,7 +316,7 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">📊 액션 예측</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
-        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];render()"></div>
+        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="document.getElementById('speedVal').textContent=SPEED_NAMES[this.value];render()"></div>
       <div id="physicsOutput" style="font-size:11px;line-height:1.8">
         <div class="control-row"><span>부력 상태</span><span id="phBuoyancy" style="color:var(--accent);font-weight:600">-</span></div>
         <div class="control-row"><span>정지 자세</span><span id="phPosture" style="color:var(--accent)">-</span></div>
@@ -322,6 +328,12 @@
         <div class="control-row"><span>롤링 경향</span><span id="phRoll" style="color:var(--accent)">-</span></div>
         <div class="control-row"><span>캐스팅 비거리</span><span id="phCast" style="color:var(--accent)">-</span></div>
         <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--text-dim)" id="phComment">형태를 수정하면 자동으로 예측됩니다</div>
+      </div>
+      <div class="rec-box">
+        <div class="rec-title">⭐ 추천 운용법</div>
+        <div id="phRec" class="rec-main">-</div>
+        <div id="phRecWhy" class="rec-why"></div>
+        <button class="btn" onclick="playRecommended()" style="width:100%;justify-content:center;margin-top:8px" id="recBtn">⭐ 추천대로 미리보기</button>
       </div>
       <button class="btn btn-accent" onclick="toggleAnimation()" style="width:100%;justify-content:center;margin-top:10px" id="animBtn">▶ 액션 미리보기</button>
       </div>
@@ -413,13 +425,14 @@
     </div>
     <div class="anim-sliders">
       <div><div class="slider-header"><span class="anim-lbl">저크·트위치 세기</span><span class="slider-value" id="animOpt_power">×1.0</span></div>
-        <input type="range" min="0.5" max="1.6" step="0.1" value="1" oninput="setAnimOpt('power',+this.value)"></div>
+        <input type="range" min="0.5" max="1.6" step="0.1" value="1" id="animPowerSlider" oninput="setAnimOpt('power',+this.value)"></div>
       <div><div class="slider-header"><span class="anim-lbl">포즈·정지 길이</span><span class="slider-value" id="animOpt_pause">×1.0</span></div>
-        <input type="range" min="0.5" max="2.5" step="0.1" value="1" oninput="setAnimOpt('pause',+this.value)"></div>
+        <input type="range" min="0.5" max="2.5" step="0.1" value="1" id="animPauseSlider" oninput="setAnimOpt('pause',+this.value)"></div>
     </div>
     <div class="anim-row">
       <button class="btn" id="animCGBtn" onclick="toggleAnimCG(this)">⊕ 무게중심·부력중심</button>
       <button class="btn active" id="animGraphBtn" onclick="toggleAnimGraph(this)">📈 그래프</button>
+      <button class="btn" onclick="animUseRecommended()">⭐ 추천 설정</button>
       <button class="btn" onclick="animSaveRef()">📌 기준 저장</button>
       <button class="btn" id="animClearBtn" onclick="animClearRef()" disabled>기준 해제</button>
     </div>
@@ -2238,7 +2251,7 @@ function calcPhysics() {
   set('phComment',comment);
 
   // Store for animation
-  lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act, buoyCode:buoyancyState.match(/\((\w+)\)/)[1]};
+  lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act, gm:rp.gm, buoyCode:buoyancyState.match(/\((\w+)\)/)[1]};
   // Uncalibrated model values for the calibration panel (ratios are always taken against these)
   const wobbles=lip.on||type==='liplessMinnow'||type==='vibe';
   lastPhys.raw={M:totalWeight, pitch, kind:buoyClass, type, speed, density, label:presetName(),
@@ -2246,9 +2259,74 @@ function calcPhysics() {
     depth:lip.on?rawDepth:type==='divingPencil'?rawDive:0, wobble:wobbles?(type==='vibe'?1.8:1)*wobbleRaw:0, cast:castRaw,
     dMdRho:vol_cm3-weights.reduce((s,w)=>s+w.g/LEAD,0)-hardware/STEEL, CF};
   calibUI();
+  const rec=recommendAction();
+  set('phRec',TECH_NAMES[rec.tech]+' · '+SPEED_NAMES[rec.speed]+' · 세기 ×'+rec.power.toFixed(1)+(rec.pause!==1?' · 포즈 ×'+rec.pause.toFixed(1):''));
+  document.getElementById('phRecWhy').innerHTML=rec.why.map(w=>'· '+w).join('<br>');
   // Slider-driven recalculation outside a render: refresh the CG/CB markers
   if(!inRender && document.getElementById('cgToggle').checked) render(true);
 }
+
+// === RECOMMENDED TECHNIQUE ===
+// A starting point read off the computed design: technique, retrieve speed, pull strength and pause, with the
+// reasons. Only design values are used (posture, buoyancy, roll stability, mass, lip), never ones that change
+// with the speed setting, so applying the recommendation does not change it. Tendencies, not a guarantee.
+const SPEED_NAMES=['','느림','느림-중','보통','빠름','매우빠름'];
+function recommendAction() {
+  const P=lastPhys, a=P.act, M=P.raw.M, tilt=-(P.pitch??0), gmR=P.gm/P.H, rise=a.riseRate, sink=a.sinkRate, why=[];
+  let tech=LURE_TYPES[a.type].techs[0], speed=3, power=1, pause=1;
+  const cms=v=>(v*100).toFixed(0)+'cm/s';
+  // Pull strength from roll stability: a stiff lure needs a harder pull to roll and dart
+  const pullFromGM=()=>{
+    if(gmR>0.15){ power=1.3; why.push('롤 복원이 강해(GM '+P.gm.toFixed(1)+'mm) 세게 당겨야 롤링·다팅이 커짐'); }
+    else if(gmR<0.04){ power=0.8; why.push('롤 복원이 약해(GM '+P.gm.toFixed(1)+'mm) 약하게 당겨도 크게 롤링'); }
+  };
+  if(a.type==='divingPencil'){
+    if(tilt>=12){ tech='sweep'; why.push('꼬리 숙임 '+tilt.toFixed(0)+'°: 길게 당기면 머리부터 깊게 들어감'); }
+    else { tech='jerk'; why.push('거의 수평('+tilt.toFixed(0)+'°)이라 깊게 잠수하지 않음 → 짧은 저크로 수면 아래 슬라이드'); }
+    if(M>=70){ speed=4; why.push('무거워서('+M.toFixed(0)+'g) 빠르게 당겨야 액션이 살아남'); }
+    pullFromGM();
+    if(rise>0) why.push('포즈: 부상 '+cms(rise)+(rise>0.4?' → 빨리 떠서 포즈는 짧게':rise<0.25?' → 천천히 떠서 포즈를 길게 줘도 됨':' → 수면에 닿으면 다음 동작'));
+  }
+  else if(a.type==='topPencil'){ tech='walk'; speed=2; why.push('거의 세워져 떠서('+tilt.toFixed(0)+'°) 짧고 리듬 있게 치면 도그워크'); }
+  else if(a.type==='popper'){ tech='pop'; pause=1.3; why.push('컵 페이스: 짧게 당겨 팝, 파문이 가라앉을 때까지 쉬기'); }
+  else if(a.type==='liplessMinnow'){
+    if(P.raw.kind==='SP'){ tech='twitch'; pause=1.6; why.push('서스펜딩: 트위칭 후 그 수심에 멈춰 기다리기'); }
+    else { tech='retrieve'; speed=2; why.push('플로팅 립리스: 천천히 감아 표층에서 롤링'); }
+    pullFromGM();
+  }
+  else if(a.type==='sinkingPencil'){
+    if(sink>0.6){ tech='liftfall'; why.push('빨리 가라앉아('+cms(sink)+') 리프트 & 폴로 바닥층 공략'); }
+    else { tech='retrieve'; speed=sink>0.35?3:2; why.push('침강 '+cms(sink)+': '+(speed===2?'느리게':'보통 속도로')+' 감아 S자 슬라이드'); }
+  }
+  else if(a.type==='vibe'){
+    if(sink>0.7){ tech='liftfall'; why.push('빨리 가라앉아('+cms(sink)+') 리프트 & 폴로 바닥 공략'); }
+    else { tech='retrieve'; speed=4; why.push('빠르게 감아야 진동이 살아남'); }
+  }
+  else if(a.type==='crank'){
+    tech='retrieve'; speed=P.lipLen>=25?4:3;
+    why.push(speed===4?'긴 립(딥 다이버): 빠르게 감아 최대 수심까지':'보통 속도로 감아 워블하며 잠행');
+    if(rise>0.15) why.push('부상이 빨라('+cms(rise)+') 스톱 & 고로 떠오르는 순간을 노려도 좋음');
+  }
+  else if(a.type==='minnow'){
+    if(rise<0.1){ tech='twitch'; pause=1.4; why.push('천천히 떠서('+cms(rise)+') 트위칭 후 포즈로 유혹'); }
+    else { tech='retrieve'; why.push('감으면 워블하며 잠행'); }
+  }
+  else if(a.type==='jerkbait'){ tech='jerk'; pause=1.8; why.push('서스펜딩: 저크 후 길게 멈춰 그 수심에 띄워 두기'); pullFromGM(); }
+  if(!LURE_TYPES[a.type].techs.includes(tech)) tech=LURE_TYPES[a.type].techs[0];
+  return {tech, speed, power, pause, why};
+}
+// Put the recommendation into the speed setting and the preview options
+function applyRecommended() {
+  calcPhysics();
+  const r=recommendAction(), sp=document.getElementById('speedSlider');
+  if(+sp.value!==r.speed){ sp.value=r.speed; document.getElementById('speedVal').textContent=SPEED_NAMES[r.speed]; calcPhysics(); render(); }
+  animTech=r.tech;
+  for(const [k,id] of [['power','animPowerSlider'],['pause','animPauseSlider']]){
+    animOpt[k]=r[k]; document.getElementById(id).value=r[k]; document.getElementById('animOpt_'+k).textContent='×'+r[k].toFixed(1);
+  }
+}
+function playRecommended() { applyRecommended(); toggleAnimation(); }
+function animUseRecommended() { applyRecommended(); updateAnimTechs(); animReset(); if(!animRunning) drawAnimation(); }
 
 // === ANIMATION ENGINE ===
 // Kinematic sketch of the chosen technique (not a fluid simulation). The camera follows the lure, so
