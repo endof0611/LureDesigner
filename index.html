@@ -221,9 +221,9 @@
       <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
         <div style="flex:1">
           <div class="slider-group"><div class="slider-header"><span class="control-label">단면 각짐</span><span class="slider-value" id="sectNVal">타원</span></div>
-            <input type="range" min="2" max="6" value="2" step="0.1" id="sectNSlider" oninput="document.getElementById('sectNVal').textContent=CTL_FMT.sectN(this.value);drawSection();calcPhysics()"></div>
+            <input type="range" min="2" max="6" value="2" step="0.1" id="sectNSlider" oninput="document.getElementById('sectNVal').textContent=CTL_FMT.sectN(this.value);drawSection();render()"></div>
           <div class="slider-group" style="margin-bottom:0"><div class="slider-header"><span class="control-label">단면 계란형</span><span class="slider-value" id="sectEVal">대칭</span></div>
-            <input type="range" min="-0.4" max="0.4" value="0" step="0.05" id="sectESlider" oninput="document.getElementById('sectEVal').textContent=CTL_FMT.sectE(this.value);drawSection();calcPhysics()"></div>
+            <input type="range" min="-0.4" max="0.4" value="0" step="0.05" id="sectESlider" oninput="document.getElementById('sectEVal').textContent=CTL_FMT.sectE(this.value);drawSection();render()"></div>
         </div>
         <svg id="sectPreview" width="64" height="76" viewBox="-32 -38 64 76" style="flex-shrink:0;background:var(--bg);border-radius:6px"></svg>
       </div>
@@ -286,14 +286,14 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">소재·부속</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">소재 밀도 (g/cm³)</span><span class="slider-value" id="densityVal">0.50</span></div>
-        <input type="range" min="0.1" max="2.0" value="0.5" step="0.01" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);calcPhysics()"></div>
+        <input type="range" min="0.1" max="2.0" value="0.5" step="0.01" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);render()"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
-        <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;calcPhysics()"></div>
+        <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">코팅·도장 무게 (g)</span><span class="slider-value" id="coatVal">0</span></div>
-        <input type="range" min="0" max="20" value="0" step="0.5" id="coatSlider" oninput="document.getElementById('coatVal').textContent=this.value;calcPhysics()"></div>
+        <input type="range" min="0" max="20" value="0" step="0.5" id="coatSlider" oninput="document.getElementById('coatVal').textContent=this.value;render()"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">와이어·래틀 등 내부 부속 (g)</span><span class="slider-value" id="hardwareVal">0</span></div>
-        <input type="range" min="0" max="30" value="0" step="0.5" id="hardwareSlider" oninput="document.getElementById('hardwareVal').textContent=this.value;calcPhysics()"></div>
+        <input type="range" min="0" max="30" value="0" step="0.5" id="hardwareSlider" oninput="document.getElementById('hardwareVal').textContent=this.value;render()"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">코팅은 바디 표면에 고르게 (에폭시 1.15 g/cm³, 부피만큼 부력 증가) · 부속은 바디 중심축을 따라 고르게 (바디 안이라 부피 추가 없음) · 바닷물 기준</span></div>
       </div>
     </div>
@@ -301,7 +301,7 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">📊 액션 예측</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
-        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];calcPhysics()"></div>
+        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="const s=['','느림','느림-중','보통','빠름','매우빠름'];document.getElementById('speedVal').textContent=s[this.value];render()"></div>
       <div id="physicsOutput" style="font-size:11px;line-height:1.8">
         <div class="control-row"><span>부력 상태</span><span id="phBuoyancy" style="color:var(--accent);font-weight:600">-</span></div>
         <div class="control-row"><span>정지 자세</span><span id="phPosture" style="color:var(--accent)">-</span></div>
@@ -1630,8 +1630,17 @@ function restPitch(slices, parts, M, cg, sect) {
     if(target>=fullV) return null;
     let lo=Infinity, hi=-Infinity;
     for(const q of slices){ lo=Math.min(lo,q.x*sn+(q.zc-q.b)*cs); hi=Math.max(hi,q.x*sn+(q.zc+q.b)*cs); }
-    for(let i=0;i<28;i++){ const c=(lo+hi)/2; if(submerged(sn,cs,c).v>target) lo=c; else hi=c; }
-    return (lo+hi)/2;
+    // f(c) = submerged volume − weight: falls as the waterline c rises (everything under at lo, only the
+    // parts at hi). Illinois false position: a handful of evaluations instead of ~28 bisection steps.
+    let fl=submerged(sn,cs,lo).v-target, fh=submerged(sn,cs,hi).v-target, side=0, c=hi;
+    if(fh>=0) return hi;
+    for(let i=0;i<40;i++){
+      c=(lo*fh-hi*fl)/(fh-fl);
+      const f=submerged(sn,cs,c).v-target;
+      if(Math.abs(f)<=target*1e-8) break;
+      if(f>0){ lo=c; fl=f; if(side>0) fh/=2; side=1; } else { hi=c; fh=f; if(side<0) fl/=2; side=-1; }
+    }
+    return c;
   };
   // Centre of buoyancy at pitch th (waterline solved for floating lures)
   const cbAt=th=>{
@@ -1666,7 +1675,7 @@ function restPitch(slices, parts, M, cg, sect) {
   for(let i=0;i<steps;i++){
     if(fs[i]<=0 && fs[i+1]>0){
       let a=ths[i], b=ths[i+1];
-      for(let k=0;k<20;k++){ const m=(a+b)/2; if(torque(m)<=0) a=m; else b=m; }
+      for(let k=0;k<13;k++){ const m=(a+b)/2; if(torque(m)<=0) a=m; else b=m; } // ±0.001°
       const th=(a+b)/2;
       if(best===null||Math.abs(th)<Math.abs(best)) best=th;
     }
@@ -1699,9 +1708,9 @@ function weightPlacement(side, w) {
 // Weights may stick out of the outline above, below and sideways (their mass still counts as inside the
 // lure), but not past the nose or the tail: both ends stay WALL mm inside the body's length.
 const WALL=0.8;
-function weightFits(w, sideF, topF) {
-  const sx=xRange(sidePts), p=weightPlacement(sideF,w), sh=weightShape(w);
-  return p.x-sh.rx>=sx.mn+WALL && p.x+sh.rx<=sx.mx-WALL;
+function weightFits(w) {
+  const sx=xRange(sidePts), x=sx.mx-(sx.mx-sx.mn)*w.pos/100, rx=weightShape(w).rx;
+  return x-rx>=sx.mn+WALL && x+rx<=sx.mx-WALL;
 }
 // Is weight w wholly inside the outline in both views (WALL mm of material all round)? Only for the
 // "sticks out" warning and the orange marking.
@@ -1718,30 +1727,29 @@ function weightInside(w, sideF, topF) {
 const WEIGHT_DIAS=Array.from({length:59},(_,i)=>1+i*0.5); // the diameter slider's steps (1-30 mm)
 function bodyOutlines() { return [flattenSmooth(sidePts,SM,12), flattenSmooth(topPts,SM,12)]; }
 // Diameter that fits mass g at w.pos (nose to tail), nearest to the one asked for (null if none)
-function fitDia(w, g, sideF, topF) {
-  const ok=d=>weightFits({pos:w.pos,g,d},sideF,topF), want=w.dp??w.d;
+function fitDia(w, g) {
+  const ok=d=>weightFits({pos:w.pos,g,d}), want=w.dp??w.d;
   if(ok(want)) return want;
   const by=WEIGHT_DIAS.slice().sort((a,b)=>Math.abs(a-want)-Math.abs(b-want));
   for(const d of by) if(ok(d)) return d;
   return null;
 }
 // Smallest and largest diameter that fit mass g at w.pos
-function diaRange(w, sideF, topF) {
-  const f=WEIGHT_DIAS.filter(d=>weightFits({pos:w.pos,g:w.g,d},sideF,topF));
+function diaRange(w) {
+  const f=WEIGHT_DIAS.filter(d=>weightFits({pos:w.pos,g:w.g,d}));
   return f.length?{mn:f[0],mx:f[f.length-1]}:null;
 }
 // Fit weight w inside the body: the diameter moves first; if no diameter fits, the mass drops to the
 // most that fits. Returns a note when it changed w.
-function fitWeight(w, sideF, topF) {
-  if(!sideF) [sideF,topF]=bodyOutlines();
-  if(weightFits(w,sideF,topF)) return ''; // already between nose and tail: its shape is left alone
+function fitWeight(w) {
+  if(weightFits(w)) return ''; // already between nose and tail: its shape is left alone
   const d0=w.d, g0=w.g;
-  let d=fitDia(w,w.g,sideF,topF);
+  let d=fitDia(w,w.g);
   if(d===null){
     // Largest fitting mass in 0.5 g steps (bisection: a lighter weight always fits at least as well)
     let lo=0, hi=Math.round(w.g*2)-1;
-    while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2,sideF,topF)!==null) lo=m; else hi=m-1; }
-    w.g=Math.max(0.5,lo/2); d=fitDia(w,w.g,sideF,topF)??1;
+    while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2)!==null) lo=m; else hi=m-1; }
+    w.g=Math.max(0.5,lo/2); d=fitDia(w,w.g)??1;
   }
   w.d=d;
   const i=weights.indexOf(w)+1, parts=[];
@@ -1752,16 +1760,16 @@ function fitWeight(w, sideF, topF) {
 // Move w toward position target (%) keeping its mass and shape, and stop at the last position where it
 // still fits between nose and tail
 function moveWeight(w, target) {
-  const [sideF,topF]=bodyOutlines(), step=Math.sign(target-w.pos);
-  if(!weightFits(w,sideF,topF)){ w.pos=target; return true; } // already outside (refit on the next render)
+  const step=Math.sign(target-w.pos);
+  if(!weightFits(w)){ w.pos=target; return true; } // already outside (refit on the next render)
   while(w.pos!==target){
     w.pos+=step;
-    if(!weightFits(w,sideF,topF)){ w.pos-=step; return false; }
+    if(!weightFits(w)){ w.pos-=step; return false; }
   }
   return true;
 }
 function fitWeights() {
-  const [sideF,topF]=bodyOutlines(), notes=weights.map(w=>fitWeight(w,sideF,topF)).filter(Boolean);
+  const notes=weights.map(w=>fitWeight(w)).filter(Boolean);
   if(notes.length) setWeightNote(notes.join(' · '));
   return notes.length>0;
 }
@@ -1785,7 +1793,7 @@ function syncWeightUI() {
   if(!w) return;
   document.getElementById('weightSlider').value=w.g; set('weightVal',w.g);
   document.getElementById('weightPosSlider').value=w.pos; set('weightPosVal',w.pos+'%');
-  const [sideF,topF]=bodyOutlines(), rg=diaRange(w,sideF,topF);
+  const rg=diaRange(w);
   document.getElementById('weightDiaSlider').value=w.d;
   set('weightDiaVal',w.d+' (길이 '+(weightShape(w).rx*2).toFixed(1)+')'+(rg?' · 가능 '+rg.mn+'~'+rg.mx:''));
 }
@@ -1799,7 +1807,7 @@ function setWeightProp(k, v) {
   // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
   if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>old?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤'); }
   else setWeightNote(fitWeight(w));
-  syncWeightUI(); calcPhysics(); render(true);
+  syncWeightUI(); render(); // physics once per frame while a slider is dragged
 }
 function addWeight() {
   if(weights.length>=8) return;
@@ -1807,14 +1815,14 @@ function addWeight() {
   const w=weights[selWeight];
   const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d, dp:w.dp}:{pos:50, g:5, d:autoDia(5), dp:autoDia(5)};
   // Same shape as the copied weight: at the nearest position to the target where it fits
-  const [sideF,topF]=bodyOutlines(), want=nw.pos;
+  const want=nw.pos;
   for(let k=0;k<=90;k++){
     const q=want+(k%2?1:-1)*Math.ceil(k/2);
     if(q<5||q>95) continue;
-    nw.pos=q; if(weightFits(nw,sideF,topF)) break;
+    nw.pos=q; if(weightFits(nw)) break;
     nw.pos=want;
   }
-  weights.push(nw); setWeightNote(fitWeight(nw,sideF,topF));
+  weights.push(nw); setWeightNote(fitWeight(nw));
   selWeight=weights.length-1; syncWeightUI(); render();
 }
 function removeWeight() {
