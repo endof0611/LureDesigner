@@ -1462,12 +1462,13 @@ function buildLureSVG(M, sw) {
   // Drawing coordinates of the nose X, the side/top centre lines and the split between the two views
   return {w, h, inner, code, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
 }
-// Design code written on the lure in prints and exports: [buoyancy F/SF/SP/SS/S][length mm]/[mass g]/[width,height mm]
+// Design code written on the lure in prints and exports:
+// [preset code]/[buoyancy F/SF/SP/SS/S]/[length]mm/[mass]g/[width]mm/[height]mm, e.g. MN001/F/125mm/16.1g/14mm/19mm
 function designCode() {
   calcPhysics();
   if(!lastPhys || !lastPhys.raw) return '';
-  const [L,H,W]=lureSize();
-  return lastPhys.buoyCode+Math.round(L)+'/'+lastPhys.raw.M.toFixed(1)+'/'+Math.round(W)+','+Math.round(H);
+  const [L,H,W]=lureSize(), g=lastPhys.raw.M.toFixed(1).replace(/\.0$/,'');
+  return PRESETS[currentPreset.cat].items[currentPreset.key].name+'/'+lastPhys.buoyCode+'/'+Math.round(L)+'mm/'+g+'g/'+Math.round(W)+'mm/'+Math.round(H)+'mm';
 }
 // The code as SVG text inside the side-view body: the largest size (up to 3 mm) whose whole box stays inside
 // the outline with a margin and clear of the eyes, as near the middle of the length as possible. A body too
@@ -1519,7 +1520,7 @@ function printLure() {
       '\n  <path d="M '+noseX+' 3.5 V '+h+' M 0 '+sideY+' H '+w+' M 0 '+topY+' H '+w+'" stroke="#555" stroke-width="0.2" fill="none"/>'+
       '\n  <text x="'+r2(noseX+2)+'" y="2.6" font-size="2.4" font-family="sans-serif" fill="#555">cm</text>\n  '+nums;
   }
-  const label=presetName()+' · '+code+' · '+lureSize().map(Math.round).join(' × ')+' mm · 실제 크기 (1:1)';
+  const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
   // The page is as wide as the drawing or the label line, whichever is longer (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em)
   const W=Math.max(w, r2(2*M+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
   const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
