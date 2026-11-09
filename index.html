@@ -492,6 +492,7 @@ let selWeight = 0; // weight edited by the sidebar sliders
 // up/lo = height above/below the centre line, hw = half width (mm). Optional nose: station of the nose
 // tip (> 0 recesses it behind the face, e.g. a popper cup), noseY: nose height offset.
 // Each preset also sets lip, material and parts so it can be edited from a complete starting point.
+// name: the preset code shown in the list (BG = big game, MN = seabass, ET = other, numbered in list order).
 // sectN / sectE: cross-section boxiness / egg shape (default 2 / 0 = ellipse). Estimated from the kind of lure
 // (round pencils, flat-sided minnows and vibrations, belly-heavy cranks), not measured; the weights are set
 // so total mass, buoyancy class and rest posture match the ellipse versions.
@@ -499,10 +500,10 @@ const PRESET_T=[0.03,0.10,0.22,0.40,0.60,0.80,1.0];
 const PRESETS={
   biggame:{label:'빅게임', items:{
     // Big-game plugs keep a thick, blunt tail carrying the tail hook eye (hook station 1 = tail end)
-    aji:{name:'전갱이', desc:'다이빙 펜슬 180mm', L:180,
+    aji:{name:'BG001', desc:'다이빙 펜슬 180mm', L:180,
       up:[5,13,19,21,19,15,7.5], lo:[4,10,15,17,15,12,6.5], hw:[4,8,10,10,9,7,4.5],
       sectN:2.2, sectE:0.1, density:0.4, weight:30.5, weightPos:64, hooks:[0.38,1], lineEye:'nose'},
-    flyingfish:{name:'날치', desc:'롱 펜슬 200mm', L:200,
+    flyingfish:{name:'BG002', desc:'롱 펜슬 200mm', L:200,
       up:[4,9,13,15,14,11,6], lo:[4,9,13,15,14,11,6], hw:[4,7,9,9,8.5,7,4],
       density:0.4, weight:26.5, weightPos:62, hooks:[0.4,1], lineEye:'nose'},
     // Maria (Yamashita) diving pencils, defined at a 200 mm base and scaled proportionally with the length
@@ -511,34 +512,34 @@ const PRESETS={
     // Rapido: side traced from a photo of a real F230 (12 stations); top view from the real top-view photo:
     // blunt, wide head, near-constant width, narrowing only near the tail (27-29 mm max width at 230 mm).
     // Scaled to 200 mm. 230 mm → ~100 g.
-    rapido:{name:'라피도', desc:'마리아 롤링 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.05,
+    rapido:{name:'BG003', desc:'마리아 롤링 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.05,
       up:[8.0,11.0,14.8,17.6,19.5,20.1,19.9,18.8,16.7,14.1,10.5,3.2], lo:[6.6,9.2,12.6,15.2,16.9,17.0,15.6,13.8,12.2,11.0,9.5,7.0],
       hw:[7.2,9.5,11.0,11.6,11.6,11.6,11.4,11.0,10.4,9.5,7.9,4.9],
       sectN:2.2, density:0.4, weight:26.5, weightPos:68, hookW:6.5, hooks:[0.43,1], lineEye:'nose'},
     // Legato: outline traced from photos of a real F190 (side + top). Unlike the Rapido the back stays high
     // and the belly rises steadily toward the tail. Pauses almost level.
     // F190 60 g → ~70 g at 200 mm.
-    legato:{name:'레가토', desc:'마리아 플랫 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.06,
+    legato:{name:'BG004', desc:'마리아 플랫 펜슬 · 200mm 기준', L:200, prop:true, T:[0.02,0.05,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.91,1.0], eyeT:0.06,
       up:[4.5,7.5,12.0,16.1,19.7,21.7,22.2,21.1,18.1,14.3,10.0,3.4], lo:[5.6,8.9,12.8,15.3,16.0,14.6,11.9,9.7,8.5,7.8,6.5,3.7],
       hw:[5.6,8.8,12.3,14.3,14.9,14.3,13.3,12.5,11.9,11.0,8.5,2.3],
       sectN:2.8, density:0.45, weight:15.5, weightPos:24, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Captain Bait diving pencils (Type1-3): outlines traced from side + top photos (both sides averaged), measured from the
     // through-wire axis drawn on the photos, at a 200 mm base and scaled proportionally (prop:true)
-    type1:{name:'Type1', desc:'캡틴베이트 슬림 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.07,
+    type1:{name:'BG005', desc:'캡틴베이트 슬림 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.07,
       up:[2.1,3.2,5.5,8.3,11.4,14.4,15.8,16.1,14.8,13,10.6,8.2,6.4,3.5], lo:[3.3,5.5,8.2,10.9,13.7,15.6,16.3,14.3,11.6,9.3,8,7.1,6.5,4.4],
       hw:[3.2,5,7.1,9.1,11.2,13,13,13,12.8,12.5,11.4,10.6,9.9,7.6],
       density:0.4, weight:22.5, weightPos:64, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type2: high forehead above the wire axis, belly that stays deep to the tail
-    type2:{name:'Type2', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.11, noseY:-2.5,
+    type2:{name:'BG006', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.11, noseY:-2.5,
       up:[7.5,9.4,11.5,13.7,16.4,18.9,20.4,20.4,19.1,16,11.9,7.5,4.1,0.9], lo:[2.2,4.1,6.6,9.5,12.6,15.3,15.9,15.3,13.5,12.2,11.8,11.7,11.2,8.4],
       hw:[5.1,6.9,9.1,10.7,12.8,14.7,15.2,15.1,14.2,12.9,11.2,9.4,7.6,4.6],
       sectN:2.2, sectE:0.1, density:0.4, weight:30, weightPos:66, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
     // Type3: the deepest of the three, with a rounded head
-    type3:{name:'Type3', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.08,
+    type3:{name:'BG007', desc:'캡틴베이트 펜슬 · 200mm 기준', L:200, prop:true, T:[0.01,0.03,0.06,0.1,0.16,0.24,0.34,0.46,0.58,0.7,0.81,0.9,0.96,1.0], eyeT:0.08,
       up:[5,7.9,11.5,14.6,18,20.8,21.8,21.8,20.3,17.7,14.8,11.7,8.7,5.2], lo:[4.8,7.1,9.9,12.7,15.2,16.2,15.9,14.8,13.3,11.5,10,8.7,7.4,4.5],
       hw:[4.7,6.9,9.8,12.4,14,14.9,15,14.5,13.7,12.5,11,9.6,8.2,6.2],
       sectN:2.2, sectE:0.1, density:0.4, weight:29.5, weightPos:67, hookW:6.5, hooks:[0.40,1], lineEye:'nose'},
-    popper:{name:'포퍼', desc:'컵 페이스 160mm', L:165, nose:0.06,
+    popper:{name:'BG008', desc:'컵 페이스 160mm', L:165, nose:0.06,
       up:[17,19,20,19,17,13,7], lo:[17,19,20,19,17,13,7], hw:[15,16,16,15,13,10,5.5],
       // Tail weight split into three slugs that fit the tapering tail (26 g in all)
       density:0.4, weights:[{pos:89,g:8.5,d:7.5},{pos:83,g:9,d:9},{pos:77,g:8.5,d:10}], hooks:[0.4,1], lineEye:'chin'}
@@ -546,25 +547,25 @@ const PRESETS={
   seabass:{label:'농어', items:{
     // Lipless (slant-head) minnow: no lip; the face is cut back at an angle from the forehead down to the
     // chin, where the line eye sits, so the body rides above the line-eye axis and the face bites the water
-    minnow:{name:'립리스 미노우', desc:'슬랜트 헤드 125mm', L:125, T:[0.02,0.05,0.09,0.15,0.25,0.40,0.55,0.70,0.85,0.95,1.0], eyeT:0.10,
+    minnow:{name:'MN001', desc:'슬랜트 헤드 125mm', L:125, T:[0.02,0.05,0.09,0.15,0.25,0.40,0.55,0.70,0.85,0.95,1.0], eyeT:0.10,
       up:[3,6.5,9.5,11.5,12.5,12.8,12.3,11,8.5,6,4.5], lo:[1.2,2.5,3.6,4.6,5.4,5.7,5.4,4.7,3.6,2.6,2],
       hw:[2,4.5,6,6.8,7,7,6.7,6,4.8,3.6,2.8],
       sectN:3, sectE:0.15, density:0.45, weight:4.5, weightPos:32, hooks:[0.38,0.75], lineEye:'nose'},
-    vibe:{name:'바이브레이션', desc:'립리스 싱킹 75mm', L:75, noseY:-2,
+    vibe:{name:'MN002', desc:'립리스 싱킹 75mm', L:75, noseY:-2,
       up:[6,13,15,14,11,7,2], lo:[5,10,12,12,10,6,2], hw:[3,4.5,5,5,4.5,3,1],
       sectN:3.5, sectE:0.2, density:1.05, weight:13, weightPos:38, hooks:[0.35,0.78], lineEye:'back'},
-    spencil:{name:'싱킹 펜슬', desc:'슬림 싱킹 100mm', L:100,
+    spencil:{name:'MN003', desc:'슬림 싱킹 100mm', L:100,
       up:[3,6,7.5,7.5,7,5,2], lo:[3,6,7.5,7.5,7,5,2], hw:[3,5,6,6,5.5,4,1.5],
       density:1.05, weight:11, weightPos:41, hooks:[0.4,0.78], lineEye:'nose'}
   }},
   etc:{label:'기타', items:{
-    crank:{name:'크랭크베이트', desc:'배스 팻 바디 60mm', L:60,
+    crank:{name:'ET001', desc:'배스 팻 바디 60mm', L:60,
       up:[7,13,15,15,12,7,2.5], lo:[7,13,15,14,11,6,2.5], hw:[6,10,11,11,9,5,2],
       lip:{len:16,ang:40}, sectN:2.3, sectE:0.1, density:0.5, weight:2.5, weightPos:34, hooks:[0.42,0.8], lineEye:'nose'},
-    walker:{name:'톱워터 펜슬', desc:'워킹 베이트 110mm', L:110,
+    walker:{name:'ET002', desc:'워킹 베이트 110mm', L:110,
       up:[3,6,8,8,7.5,6,3], lo:[3,6,8,8,7.5,6,3], hw:[3,6,8,8,7.5,6,3],
       density:0.4, weights:[{pos:72,g:6,d:11.5}], hooks:[0.4,0.8], lineEye:'nose'},
-    jerk:{name:'저크베이트', desc:'서스펜드 100mm', L:100,
+    jerk:{name:'ET003', desc:'서스펜드 100mm', L:100,
       up:[4,9,11,11,9,6,2], lo:[4,9,11,11,9,6,2], hw:[3,4.5,5.5,5.5,5,3.5,1.5],
       lip:{len:12,ang:25}, sectN:3, sectE:0.1, density:0.6, weight:3, weightPos:31, hooks:[0.38,0.75], lineEye:'nose'}
   }}
@@ -1454,12 +1455,45 @@ function buildLureSVG(M, sw) {
   // One X origin for both views so nose and tail line up vertically, as in the editor
   const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+M*2), h=r2(sb.h+tb.h+GAP+M*2);
   const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+sw+'"/>';
-  const parts=partsMarkup(0,0,1,false);
+  const parts=partsMarkup(0,0,1,false), code=designCode();
   const inner='  <!-- Side View -->\n  <g id="side-view" transform="translate('+r2(M-x1)+' '+r2(M-sb.y1)+')">\n    '+body(sidePts)+wSide+lipEl+
-    (parts?'\n    '+parts:'')+'\n  </g>\n'+
+    (parts?'\n    '+parts:'')+designCodeMarkup(code,sideF)+'\n  </g>\n'+
     '  <!-- Top View -->\n  <g id="top-view" transform="translate('+r2(M-x1)+' '+r2(M+sb.h+GAP-tb.y1)+')">\n    '+body(topPts)+wTop+'\n  </g>';
   // Drawing coordinates of the nose X, the side/top centre lines and the split between the two views
-  return {w, h, inner, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
+  return {w, h, inner, code, noseX:r2(M-x1+xRange(sidePts).mx), sideY:r2(M-sb.y1), topY:r2(M+sb.h+GAP-tb.y1), split:r2(M+sb.h+GAP/2)};
+}
+// Design code written on the lure in prints and exports:
+// [preset code]/[buoyancy F/SF/SP/SS/S]/[length]mm/[mass]g/[width]mm/[height]mm, e.g. MN001/F/125mm/16.1g/14mm/19mm
+function designCode() {
+  calcPhysics();
+  if(!lastPhys || !lastPhys.raw) return '';
+  const [L,H,W]=lureSize(), g=lastPhys.raw.M.toFixed(1).replace(/\.0$/,'');
+  return PRESETS[currentPreset.cat].items[currentPreset.key].name+'/'+lastPhys.buoyCode+'/'+Math.round(L)+'mm/'+g+'g/'+Math.round(W)+'mm/'+Math.round(H)+'mm';
+}
+// The code as SVG text inside the side-view body: the largest size (up to 3 mm) whose whole box stays inside
+// the outline with a margin and clear of the eyes, as near the middle of the length as possible. A body too
+// small for 1.2 mm text gets none (the print label still carries the code).
+function designCodeMarkup(code, sideF) {
+  if(!code) return '';
+  const sx=xRange(sidePts), L=sx.mx-sx.mn, mid=(sx.mn+sx.mx)/2, MARGIN=0.6;
+  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
+  const hitsEye=(cx,cy,w,h)=>eyes.some(e=>{ const dx=Math.max(Math.abs(e.x-cx)-w/2,0), dy=Math.max(Math.abs(e.y-cy)-h/2,0); return dx*dx+dy*dy<(eyeR+MARGIN)**2; });
+  for(let fs=3; fs>=1.2; fs-=0.1){
+    const w=code.length*0.62*fs, h=fs*0.8; // monospace advance ≈ 0.6 em; digit height ≈ 0.75 em
+    let best=null;
+    for(let k=0;k<=80;k++){
+      const cx=sx.mn+L*k/80;
+      if(cx-w/2<sx.mn+MARGIN || cx+w/2>sx.mx-MARGIN) continue;
+      let lo=-Infinity, hi=Infinity; // vertical room shared by the whole width of the text
+      for(let j=0;j<=10 && lo<hi;j++){ const sp=spanAt(sideF,cx-w/2+w*j/10); if(!sp){ lo=Infinity; break; } lo=Math.max(lo,sp.mn); hi=Math.min(hi,sp.mx); }
+      if(hi-lo<h+2*MARGIN) continue;
+      const cy=(lo+hi)/2;
+      if(hitsEye(cx,cy,w,h)) continue;
+      if(!best || Math.abs(cx-mid)<Math.abs(best.cx-mid)) best={cx,cy};
+    }
+    if(best) return '\n    <text class="design-code" x="'+r2(best.cx)+'" y="'+r2(best.cy+h/2)+'" font-size="'+r2(fs)+'" font-family="monospace" font-weight="700" text-anchor="middle" fill="#1e293b">'+code+'</text>';
+  }
+  return '';
 }
 function exportSVG() {
   const {w,h,inner}=buildLureSVG(20,SW);
@@ -1470,7 +1504,7 @@ function exportSVG() {
 
 // Actual-size print: the SVG is sized in mm (1 unit = 1 mm), with a 50 mm scale bar to check the printer scale
 function printLure() {
-  const M=8, BAR=50, {w,h,inner,noseX,sideY,topY,split}=buildLureSVG(M,0.3);
+  const M=8, BAR=50, {w,h,inner,code,noseX,sideY,topY,split}=buildLureSVG(M,0.3);
   const H=r2(h+16), by=r2(h+4); // scale bar and label below the drawing (and its grid)
   // mm grid as in the editor (1 mm / 10 mm from the nose and the centre line).
   // The body is left unfilled so the grid shows through it for measuring.
@@ -1486,16 +1520,18 @@ function printLure() {
       '\n  <path d="M '+noseX+' 3.5 V '+h+' M 0 '+sideY+' H '+w+' M 0 '+topY+' H '+w+'" stroke="#555" stroke-width="0.2" fill="none"/>'+
       '\n  <text x="'+r2(noseX+2)+'" y="2.6" font-size="2.4" font-family="sans-serif" fill="#555">cm</text>\n  '+nums;
   }
-  const label=presetName()+' · '+lureSize().map(Math.round).join(' × ')+' mm · 실제 크기 (1:1)';
+  const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
+  // The page is as wide as the drawing or the label line, whichever is longer (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em)
+  const W=Math.max(w, r2(2*M+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
   const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'mm" height="'+H+'mm" viewBox="0 0 '+w+' '+H+'">'+grid+'\n'+body+
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+grid+'\n'+body+
     '\n  <path d="M '+M+' '+(by-2)+' V '+(by+2)+' M '+M+' '+by+' H '+(M+BAR)+' M '+(M+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
     '\n  <text x="'+(M+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
     '\n  <text x="'+M+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
   // Hairline strokes on paper (the on-screen widths would be up to 1.5 mm thick)
   document.getElementById('printArea').innerHTML=svg.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"');
   // Smallest page that holds the drawing at 1:1 with 10 mm margins (A4 portrait / landscape, then A3)
-  const fits=(pw,ph)=>w<=pw-20&&H<=ph-20;
+  const fits=(pw,ph)=>W<=pw-20&&H<=ph-20;
   const page=fits(210,297)?'A4 portrait':fits(297,210)?'A4 landscape':fits(297,420)?'A3 portrait':'A3 landscape';
   document.getElementById('printPage').textContent='@page{size:'+page+';margin:10mm}';
   if(!fits(297,210) && !fits(210,297)) alert('실제 크기가 A4보다 커서 '+page.replace(' portrait',' 세로').replace(' landscape',' 가로')+' 용지로 설정됩니다.'+(fits(420,297)||fits(297,420)?'':' A3에도 다 들어가지 않아 일부가 잘릴 수 있습니다.'));
@@ -2199,7 +2235,7 @@ function calcPhysics() {
   set('phComment',comment);
 
   // Store for animation
-  lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act};
+  lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act, buoyCode:buoyancyState.match(/\((\w+)\)/)[1]};
   // Uncalibrated model values for the calibration panel (ratios are always taken against these)
   const wobbles=lip.on||type==='liplessMinnow'||type==='vibe';
   lastPhys.raw={M:totalWeight, pitch, kind:buoyClass, type, speed, density, label:presetName(),
