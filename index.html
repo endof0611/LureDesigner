@@ -186,7 +186,7 @@
 <body>
 <div class="header">
   <div style="display:flex;align-items:center;gap:8px">
-    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰</button>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
     <div class="logo"><div class="logo-icon">🐟</div><span>MINNOW DESIGNER</span></div>
   </div>
   <div class="header-actions">
@@ -333,9 +333,9 @@
         <div class="rec-title">⭐ 추천 운용법</div>
         <div id="phRec" class="rec-main">-</div>
         <div id="phRecWhy" class="rec-why"></div>
-        <button class="btn" onclick="playRecommended()" style="width:100%;justify-content:center;margin-top:8px" id="recBtn">⭐ 추천대로 미리보기</button>
+        <button class="btn" onclick="playRecommended()" style="width:100%;justify-content:center;margin-top:8px">⭐ 추천대로 미리보기</button>
       </div>
-      <button class="btn btn-accent" onclick="toggleAnimation()" style="width:100%;justify-content:center;margin-top:10px" id="animBtn">▶ 액션 미리보기</button>
+      <button class="btn btn-accent" onclick="toggleAnimation()" style="width:100%;justify-content:center;margin-top:10px">▶ 액션 미리보기</button>
       </div>
     </div>
     <div class="panel collapsed" id="calibPanel">
@@ -374,12 +374,12 @@
       <button class="tool-btn" onclick="resetView()">⊞</button>
     </div>
     <div class="views">
-      <div class="view-row" id="sideRow">
+      <div class="view-row">
         <span class="view-label side">SIDE VIEW 측면</span>
         <span class="view-dim" id="sideDim"></span>
         <div class="view-canvas" id="sideCont"><svg id="sideSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
       </div>
-      <div class="view-row" id="topRow">
+      <div class="view-row">
         <span class="view-label top">TOP VIEW 상면</span>
         <span class="view-dim" id="topDim"></span>
         <div class="view-canvas" id="topCont"><svg id="topSVG" xmlns="http://www.w3.org/2000/svg"></svg></div>
@@ -430,8 +430,8 @@
         <input type="range" min="0.5" max="2.5" step="0.1" value="1" id="animPauseSlider" oninput="setAnimOpt('pause',+this.value)"></div>
     </div>
     <div class="anim-row">
-      <button class="btn" id="animCGBtn" onclick="toggleAnimCG(this)">⊕ 무게중심·부력중심</button>
-      <button class="btn active" id="animGraphBtn" onclick="toggleAnimGraph(this)">📈 그래프</button>
+      <button class="btn" onclick="toggleAnimCG(this)">⊕ 무게중심·부력중심</button>
+      <button class="btn active" onclick="toggleAnimGraph(this)">📈 그래프</button>
       <button class="btn" onclick="animUseRecommended()">⭐ 추천 설정</button>
       <button class="btn" onclick="animSaveRef()">📌 기준 저장</button>
       <button class="btn" id="animClearBtn" onclick="animClearRef()" disabled>기준 해제</button>
@@ -1091,7 +1091,6 @@ function renderView(which) {
   // Grid (always shown, full strength) - 1mm minor, 10mm (1cm) major, anchored at nose. Drawn with tiled
   // patterns instead of one <line> per grid line.
   {
-    const gOp=1;
     const noseSX=cx+mxx*zoom;
     let defs='', fills='';
     const grid=(id,size,sw,op)=>{
@@ -1100,12 +1099,11 @@ function renderView(which) {
         '<path d="M '+c+' 0 V '+size+' M 0 '+c+' H '+size+'" fill="none" stroke="#000" stroke-width="'+sw+'" opacity="'+op+'"/></pattern>';
       fills+='<rect width="100%" height="100%" fill="url(#'+id+')"/>';
     };
-    if(zoom>=3) grid('gmm'+which, zoom, 0.5, (0.4*gOp).toFixed(3));
-    grid('gcm'+which, 10*zoom, 1, (0.8*gOp).toFixed(3));
-    const axisOp=gOp.toFixed(3);
+    if(zoom>=3) grid('gmm'+which, zoom, 0.5, 0.4);
+    grid('gcm'+which, 10*zoom, 1, 0.8);
     html+='<defs>'+defs+'</defs>'+fills;
-    html+='<line x1="'+noseSX+'" y1="0" x2="'+noseSX+'" y2="'+h+'" stroke="#000" stroke-width="1.5" opacity="'+axisOp+'"/>';
-    html+='<line x1="0" y1="'+cy+'" x2="'+w+'" y2="'+cy+'" stroke="#000" stroke-width="1.5" opacity="'+axisOp+'"/>';
+    html+='<line x1="'+noseSX+'" y1="0" x2="'+noseSX+'" y2="'+h+'" stroke="#000" stroke-width="1.5"/>';
+    html+='<line x1="0" y1="'+cy+'" x2="'+w+'" y2="'+cy+'" stroke="#000" stroke-width="1.5"/>';
   }
 
   // Symmetry line
@@ -1453,8 +1451,8 @@ function onUp(){
 }
 
 // === EXPORT ===
-// One valid SVG document: side view (body, lip, parts) on top, top view below. Units are the editor's mm.
-// Side view (body, weight, lip, parts) above the top view, in mm. M = margin, sw = outline width (mm)
+// One valid SVG document: side view (body, weights, lip, parts) above the top view. Units are the editor's mm.
+// M = margin, sw = outline width (mm)
 // MX: left/right margin (defaults to M, the top/bottom margin)
 function buildLureSVG(M, sw, MX=M) {
   const GAP=20;
@@ -1553,7 +1551,7 @@ function printLure() {
   const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
   // The page is as wide as the drawing or the label line, whichever is longer (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em)
   const W=Math.max(w, r2(2*MX+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
-  const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
+  const body=inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"');
   const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+grid+'\n'+body+
     '\n  <path d="M '+MX+' '+(by-2)+' V '+(by+2)+' M '+MX+' '+by+' H '+(MX+BAR)+' M '+(MX+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
     '\n  <text x="'+(MX+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
@@ -1676,7 +1674,6 @@ function ellipseSeg(t) {
 // cb is the centre of buoyancy of the submerged part at that pitch; gm is the roll (sideways) metacentric
 // height in mm at that pitch: > 0 rights itself, ≤ 0 rolls over.
 function restPitch(slices, parts, M, cg, sect) {
-  sect=sect||SECT_ELLIPSE;
   const pv=parts.reduce((s,i)=>s+i.v*1000,0); // mm³
   const pvx=parts.reduce((s,i)=>s+i.v*1000*i.x,0), pvz=parts.reduce((s,i)=>s+i.v*1000*i.z,0);
   const fullV=slices.reduce((s,q)=>s+sect.F*q.a*q.b*q.dx,0)+pv;
@@ -1838,7 +1835,6 @@ function moveWeight(w, target) {
 function fitWeights() {
   const notes=weights.map(w=>fitWeight(w)).filter(Boolean);
   if(notes.length) setWeightNote(notes.join(' · '));
-  return notes.length>0;
 }
 function setWeightNote(t) { const n=document.getElementById('weightNote'); n.textContent=t?'⚠ '+t:''; n.style.display=t?'':'none'; }
 // An ellipsoid of the lead's volume: diameter d across (height and width), length from the volume
@@ -2045,8 +2041,8 @@ function calibUI(){
   // Predicted value (with calibration applied) and, once a measurement is typed, the difference
   const cell=(pred,meas,dig,unit)=>pred===null?'-':pred.toFixed(dig)+(isNaN(meas)?'':'<small style="color:'+(Math.abs(meas-pred)<=Math.max(Math.abs(pred)*0.05,0.5*Math.pow(10,-dig))?'#10b981':'#f59e0b')+'">'+(meas>=pred?'+':'−')+Math.abs(meas-pred).toFixed(dig)+unit+'</small>');
   set('calMp',cell(r.M,m.M,1,''));
-  const pp=r.pitch===null?null:r.pitch;
-  set('calPp',pp===null?'-':(Math.abs(pp)<0.5?'수평':(pp>0?'머리 ':'꼬리 ')+Math.abs(pp).toFixed(0))+(isNaN(m.P)||pp===null?'':'<small style="color:'+(Math.abs(m.P-pp)<=5?'#10b981':'#f59e0b')+'">'+Math.abs(m.P-pp).toFixed(0)+'° 차</small>'));
+  const pp=r.pitch;
+  set('calPp',pp===null?'-':(Math.abs(pp)<0.5?'수평':(pp>0?'머리 ':'꼬리 ')+Math.abs(pp).toFixed(0))+(isNaN(m.P)?'':'<small style="color:'+(Math.abs(m.P-pp)<=5?'#10b981':'#f59e0b')+'">'+Math.abs(m.P-pp).toFixed(0)+'° 차</small>'));
   const vOk=r.kind!=='SP';
   set('calVl',r.kind==='S'?'침강 속도 (cm/s)':r.kind==='F'?'부상 속도 (cm/s)':'침강·부상 (서스펜딩)');
   set('calVp',vOk?cell(r.freeV*CF.sink.v*100,m.V,0,''):'-');
@@ -2078,7 +2074,7 @@ function calibAdd(){
   if(r.wobble>0 && m.W>0) ratio.wobble=m.W/r.wobble;
   if(r.cast>0 && m.C>0) ratio.cast=m.C/r.cast;
   if(!Object.keys(ratio).length && !(m.M>0) && isNaN(m.P)){ msg('입력한 측정값이 없습니다.'); return; }
-  calib.samples.push({t:Date.now(), label:r.label, type:r.type, speed:r.speed, r:ratio,
+  calib.samples.push({t:Date.now(), label:r.label, r:ratio,
     m:{M:m.M>0?m.M:null, P:isNaN(m.P)?null:m.P}, p:{M:r.M, pitch:r.pitch}});
   calibSave(); calcPhysics();
   const ks=Object.keys(ratio);
@@ -2101,8 +2097,8 @@ function calcPhysics() {
   const sx=drawnRange('side').x, [L,H,W]=lureSize(); // drawn length, height, width (mm)
   if(L<1||H<1||W<1) return;
   const density=parseFloat(document.getElementById('densitySlider').value);
-  const addWeight=weights.reduce((s,w)=>s+w.g,0);
-  const weightPos=addWeight>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/addWeight:50; // mass-weighted position
+  const leadG=weights.reduce((s,w)=>s+w.g,0);
+  const weightPos=leadG>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/leadG:50; // mass-weighted position
   const hookW=parseFloat(document.getElementById('hookWeightSlider').value);
   const coat=parseFloat(document.getElementById('coatSlider').value);
   const hardware=parseFloat(document.getElementById('hardwareSlider').value);
@@ -2158,7 +2154,6 @@ function calcPhysics() {
   }
   const M=items.reduce((s,i)=>s+i.m,0), V=items.reduce((s,i)=>s+i.v,0);
   const cg={x:items.reduce((s,i)=>s+i.m*i.x,0)/M, z:items.reduce((s,i)=>s+i.m*i.z,0)/M};
-  const totalWeight=M;
 
   // Buoyancy (sea water)
   const buoyancyRatio=M/(V*WATER);
@@ -2233,7 +2228,7 @@ function calcPhysics() {
   // CG toward the nose → lip and tail catch air and the lure tumbles.
   const cgFromNose=(sx.mx-cg.x)/L;
   const Cd=Math.max(0.35,Math.min(0.65,0.38+0.6*(0.5-cgFromNose)))+(lip.on?0.05:0);
-  const castRaw=castRange(totalWeight,Cd*aMax/100), castM=castRaw*CF.cast.v;
+  const castRaw=castRange(M,Cd*aMax/100), castM=castRaw*CF.cast.v;
   const castDist=castM>=55?'장거리':castM>=40?'중거리':'단거리';
 
   // Comment follows the computed rest posture, plus the weight's effect on casting
@@ -2260,7 +2255,7 @@ function calcPhysics() {
   document.getElementById('phBuoyancy').style.color=buoyancyColor;
   set('phPosture',posture);
   set('phVolume',vol_cm3.toFixed(1)+' cm³');
-  set('phWeight',totalWeight.toFixed(1)+' g');
+  set('phWeight',M.toFixed(1)+' g');
   set('phDepth',depthText);
   set('phWobble',lt.name+' · '+lt.techs.map(t=>TECH_NAMES[t]).join(' / '));
   // Lip and lipless wobblers swim by themselves; pencils and topwater lures act when worked
@@ -2275,7 +2270,7 @@ function calcPhysics() {
   lastPhys={L,H,pitch,lipLen:lip.len,lipAng:lip.ang,hasLip:lip.on,cg,cb:rp.cb,act, gm:rp.gm, buoyCode:buoyancyState.match(/\((\w+)\)/)[1]};
   // Uncalibrated model values for the calibration panel (ratios are always taken against these)
   const wobbles=lip.on||type==='liplessMinnow'||type==='vibe';
-  lastPhys.raw={M:totalWeight, pitch, kind:buoyClass, type, speed, density, label:presetName(),
+  lastPhys.raw={M, pitch, kind:buoyClass, type, speed, density, label:presetName(),
     freeV:buoyClass==='SP'?0:freeVraw, depthKind:lip.on?'lipDepth':type==='divingPencil'?'pencilDive':null,
     depth:lip.on?rawDepth:type==='divingPencil'?rawDive:0, wobble:wobbles?(type==='vibe'?1.8:1)*wobbleRaw:0, cast:castRaw,
     dMdRho:vol_cm3-weights.reduce((s,w)=>s+w.g/LEAD,0)-hardware/STEEL, CF};
@@ -2503,7 +2498,7 @@ function newSim(a,tech,live,opt){
 function animSimulate(a,tech,opt,secs){
   const s=newSim(a,tech,false,opt), pts=[], dt=1/120, N=Math.round(secs/dt);
   for(let i=0;i<N;i++){ animStep(s,a,tech,dt,opt); if(i%6===0) pts.push({x:s.x, d:s.d, lat:s.lat}); }
-  return {pts, ser:s.ser, maxD:s.maxD, peakV:s.peakV, avgV:s.x/secs, secs};
+  return {pts, ser:s.ser, maxD:s.maxD, peakV:s.peakV, avgV:s.x/secs};
 }
 
 function animLoop(ts){
