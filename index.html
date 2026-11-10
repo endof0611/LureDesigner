@@ -240,7 +240,7 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">16</span></div>
         <input type="range" min="8" max="32" value="16" id="topPtsSlider" onchange="changePts('top',this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">1.00</span></div>
-        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);syncSlidersFromPoints();render()"></div>
+        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="onSmooth(this.value)"></div>
       </details>
       </div>
     </div>
@@ -485,6 +485,7 @@ let dragWeightIdx = null; // index into weights while one is dragged
 let layoutNoseX = null; // nose X frozen during a drag so the view doesn't shift under the pointer
 let isPan = false, panRef = {x:0,y:0}, panTarget = null;
 let isTouch = false; // true when using touch input
+let dragMoved = false, dragDirty0 = false; // a press that never moves leaves no undo step and no "modified" mark
 
 // Parts: each has {x,y} in side-view coords
 let eyes = [];
@@ -598,8 +599,11 @@ function setCtl(id, v) {
   const s=document.getElementById(id+'Slider');
   s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
 }
+// Curve smoothness (SM) is part of the lure: saved in the undo history and reset by a preset
+function setSM(v) { SM=v; document.getElementById('smoothSlider').value=Math.round(v*100); document.getElementById('smoothVal').textContent=v.toFixed(2); }
+function onSmooth(v) { saveHGrouped('smooth'); setSM(v/100); syncSlidersFromPoints(); render(); }
 function ctlState() {
-  const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
+  const st={sl:{}, ck:{}, sm:SM, preset:{...currentPreset}, dirty:presetDirty};
   for(const id in CTL_FMT) st.sl[id]=document.getElementById(id+'Slider').value;
   CTL_CHECKS.forEach(id=>st.ck[id]=document.getElementById(id).checked);
   return st;
@@ -608,6 +612,7 @@ function ctlState() {
 function restoreCtl(st) {
   for(const id in st.sl) setCtl(id,st.sl[id]);
   for(const id in st.ck) document.getElementById(id).checked=st.ck[id];
+  setSM(st.sm);
   const changed=st.preset.cat!==currentPreset.cat||st.preset.key!==currentPreset.key;
   currentPreset={...st.preset}; presetDirty=st.dirty;
   if(changed){ presetViewCat=currentPreset.cat; updatePresetUI(); }
@@ -642,6 +647,7 @@ function presetProfile(arr, t, T) {
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
+  setSM(1);
   // A preset may set its own stations; coarse ones are densified so the outline bends smoothly
   let T=p.T||PRESET_T, up=p.up, lo=p.lo, hw=p.hw;
   if(T.length<11){
@@ -683,7 +689,7 @@ function applyPreset(cat, key) {
   setCtl('coat',p.coat||0); setCtl('hardware',p.hardware||0);
   setCtl('sectN',p.sectN||2); setCtl('sectE',p.sectE||0); drawSection();
   document.getElementById('lipToggle').checked=!!p.lip;
-  if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
+  setCtl('lipLen',p.lip?p.lip.len:30); setCtl('lipAng',p.lip?p.lip.ang:35); // lipless presets get the default lip, not the last preset's
   document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
   document.getElementById('symTop').checked=true;
   document.getElementById('propToggle').checked=!!p.prop;
@@ -749,7 +755,7 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
-  setWeightNote(''); drawSection();
+  setWeightNote('');
   updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
 function undoAction() {
@@ -842,7 +848,8 @@ function scaleLengthAll(v) {
   if(prop){
     // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
-    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r)), dp:Math.max(1,half(w.dp*r))})); syncWeightUI();
+    const cl=(x,lo,hi)=>Math.max(lo,Math.min(hi,x)); // the weight sliders' ranges
+    weights=lenBase.weights.map(w=>({pos:w.pos, g:cl(half(w.g*r**3),0.5,100), d:cl(half(w.d*r),1,30), dp:cl(half(w.dp*r),1,30)})); syncWeightUI();
     setCtl('hookWeight',half(lenBase.hookWeight*r**3));
     setCtl('coat',half(lenBase.coat*r**2)); setCtl('hardware',half(lenBase.hardware*r**3)); // coating follows the surface
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
@@ -913,6 +920,7 @@ function syncSlidersFromPoints() {
   const set=(id,v)=>{v=Math.round(v);document.getElementById(id+'Slider').value=v;document.getElementById(id+'Val').textContent=v;};
   set('len',L); set('sideH',H); set('topW',W);
   document.getElementById('sizeInfo').textContent=[L,H,W].map(Math.round).join(' × ')+' mm';
+  drawSection(); // its height : width ratio follows the outline
 }
 
 // === PARTS MANAGEMENT ===
@@ -937,10 +945,10 @@ function addPart(type) {
 }
 
 function removePart(type) {
+  const arr=type==='eye'?eyes:type==='hook'?hooks:lineEyes;
+  if(!arr.length) return;
   saveH();
-  if(type==='eye' && eyes.length>0) eyes.pop();
-  else if(type==='hook' && hooks.length>0) hooks.pop();
-  else if(type==='lineEye' && lineEyes.length>0) lineEyes.pop();
+  arr.pop();
   selectedPart=null;
   updatePartCounts();
   render();
@@ -1292,6 +1300,8 @@ function hitPoint(pts, q, from, to) {
   return ci;
 }
 
+// Undo step for a drag; dropped again in onUp when nothing moved
+function beginDrag() { dragDirty0=presetDirty; dragMoved=false; saveH(); }
 function onDown(e,view) {
   const q=localPos(e,view);
   const pts=viewPts(view), n=pts.length;
@@ -1306,7 +1316,7 @@ function onDown(e,view) {
         const d=Math.hypot(p.x-q.x,p.y-q.y); if(d<bestD){bestD=d;bestType=type;bestIdx=i;}
       }));
       if(bestType!==null){
-        saveH(); dragView=view; dragType='part'; dragPartType=bestType; dragPartIdx=bestIdx;
+        beginDrag(); dragView=view; dragType='part'; dragPartType=bestType; dragPartIdx=bestIdx;
         selectedPart={type:bestType,idx:bestIdx};
         render(true); return;
       }
@@ -1323,11 +1333,11 @@ function onDown(e,view) {
       }
     }
     if(ci>=0){
-      saveH(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
+      beginDrag(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
       layoutNoseX=Math.max(xRange(sidePts).mx,xRange(topPts).mx);
       render(true);
     } else if(onWeight>=0){
-      saveH(); dragView=view; dragType='weight'; dragWeightIdx=onWeight; selWeight=onWeight; selectedPart=null; syncWeightUI();
+      beginDrag(); dragView=view; dragType='weight'; dragWeightIdx=onWeight; selWeight=onWeight; selectedPart=null; syncWeightUI();
       render(true);
     } else {
       const pan=view==='side'?sidePan:topPan;
@@ -1393,14 +1403,16 @@ function onMove(e,view) {
     const arr = dragPartType==='eye'?eyes : dragPartType==='hook'?hooks : lineEyes;
     arr[dragPartIdx].x=q.x;
     arr[dragPartIdx].y=q.y;
+    dragMoved=true;
     render(true);
     return;
   }
 
   // Weight dragging: moves along the body, updating the weight-position slider (5-95%)
   if(dragView===view && dragType==='weight'){
-    const sx=xRange(sidePts), L=sx.mx-sx.mn;
+    const sx=xRange(sidePts), L=sx.mx-sx.mn, p0=weights[dragWeightIdx].pos;
     moveWeight(weights[dragWeightIdx],Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)))); // stops where it would stick out
+    if(weights[dragWeightIdx].pos!==p0) dragMoved=true;
     syncWeightUI();
     render(true);
     return;
@@ -1413,6 +1425,7 @@ function onMove(e,view) {
     const before=xRange(pts);
     pts[dragIdx].x=q.x;
     pts[dragIdx].y=q.y;
+    dragMoved=true;
     applySymTo(pts,symOn(view));
     const after=xRange(pts);
     // Keep the other view's length identical to this one
@@ -1433,9 +1446,10 @@ function endDrag() {
   dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;dragWeightIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
 }
 function onUp(){
-  const changed=dragIdx!==null || dragPartIdx!==null || dragType==='weight';
+  const dragged=dragIdx!==null || dragPartIdx!==null || dragType==='weight';
   endDrag();
-  if(changed){ syncSlidersFromPoints(); render(); }
+  if(dragged && !dragMoved){ undoStack.pop(); presetDirty=dragDirty0; render(true); } // a click, not an edit
+  else if(dragged){ syncSlidersFromPoints(); render(); }
 }
 
 // === EXPORT ===
@@ -1447,7 +1461,8 @@ function buildLureSVG(M, sw, MX=M) {
   const bbox=pts=>{ const x=xRange(pts), y=yRange(pts); return {x1:x.mn,y1:y.mn,w:x.mx-x.mn,h:y.mx-y.mn}; };
   const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
   const hookR=parseFloat(document.getElementById('hookSizeSlider').value);
-  const sideExtent=sidePts.slice();
+  // Extent of the drawn curves (they round past the control points, e.g. at the tail)
+  const sideExtent=flattenSmooth(sidePts,SM,16);
   const addCircle=(p,r)=>sideExtent.push({x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r});
   eyes.forEach(p=>addCircle(p,eyeR));
   hooks.concat(lineEyes).forEach(p=>addCircle(p,hookR));
@@ -1465,7 +1480,7 @@ function buildLureSVG(M, sw, MX=M) {
     const el=(y,ry)=>'\n    <ellipse class="weight" cx="'+r2(wp.x)+'" cy="'+r2(y)+'" rx="'+r2(sz.rx)+'" ry="'+r2(ry)+'" fill="none" stroke="#475569" stroke-width="0.5" stroke-dasharray="2,1"/>';
     wSide+=el(wp.z,sz.ry); wTop+=el(0,sz.ry);
   });
-  const sb=bbox(sideExtent), tb=bbox(topPts);
+  const sb=bbox(sideExtent), tb=bbox(flattenSmooth(topPts,SM,16));
   // One X origin for both views so nose and tail line up vertically, as in the editor
   const x1=Math.min(sb.x1,tb.x1), w=r2(Math.max(sb.x1+sb.w,tb.x1+tb.w)-x1+MX*2), h=r2(sb.h+tb.h+GAP+M*2);
   const body=pts=>'<path d="'+smoothPath(pts,SM)+'" fill="'+FC+'" stroke="'+SC+'" stroke-width="'+sw+'"/>';
@@ -1813,9 +1828,10 @@ function fitWeight(w) {
 function moveWeight(w, target) {
   const step=Math.sign(target-w.pos);
   if(!weightFits(w)){ w.pos=target; return true; } // already outside (refit on the next render)
-  while(w.pos!==target){
-    w.pos+=step;
-    if(!weightFits(w)){ w.pos-=step; return false; }
+  while(step>0?w.pos<target:w.pos>target){
+    const prev=w.pos;
+    w.pos=step>0?Math.min(target,prev+1):Math.max(target,prev-1); // 1% steps, ending exactly on the target
+    if(!weightFits(w)){ w.pos=prev; return false; }
   }
   return true;
 }
@@ -1982,7 +1998,7 @@ function actionText(a, tech) {
     liplessMinnow:{retrieve:'표층 약 '+m(a.runDepth)+'에서 롤링 위주의 타이트 액션', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop},
     sinkingPencil:{retrieve:'S자 슬라이드 + 롤링, 느리게 감을수록 깊게 (약 '+m(a.runDepth)+')', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop,
       liftfall:'들어 올리면 상승, 멈추면 롤링하며 '+stop},
-    vibe:{retrieve:'잘게 떠는 고속 진동 (약 '+a.wobHz.toFixed(0)+' Hz), 수심 약 '+m(a.runDepth), liftfall:'들어 올리며 진동하다 멈추면 '+stop+' (바닥 공략)'},
+    vibe:{retrieve:'잘게 떠는 고속 진동 (약 '+a.wobHz.toFixed(0)+' Hz), 수심 약 '+m(a.runDepth), liftfall:'들어 올리며 진동하다 멈추면 '+stop+(a.freeRate>0?' (바닥 공략)':'')},
     crank:{retrieve:'감으면 립이 물을 받아 워블하며 약 '+m(a.runDepth)+'까지 잠행', stopgo:'감으면 잠행, 멈추면 '+stop},
     minnow:{retrieve:'감으면 워블하며 약 '+m(a.runDepth)+'까지 잠행', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop, stopgo:'감으면 잠행, 멈추면 '+stop},
     jerkbait:{jerk:'저크하면 좌우로 크게 다팅하며 약 '+m(a.diveDepth)+'까지, 포즈에서 '+stop, twitch:'짧게 치면 작은 다팅, 멈추면 '+stop,
@@ -2000,7 +2016,10 @@ function actionText(a, tech) {
 const CAL_KEY='lureDesigner.calib';
 const CAL_NAMES={lipDepth:'립 잠행 깊이', pencilDive:'펜슬 저크 잠수', sink:'침강·부상 속도', wobble:'워블 주기', cast:'비거리'};
 let calib={on:true, samples:[]};
-try{ const c=JSON.parse(localStorage.getItem(CAL_KEY)); if(c && Array.isArray(c.samples)) calib={on:c.on!==false, samples:c.samples.filter(x=>x&&x.r)}; }catch(e){}
+try{ const c=JSON.parse(localStorage.getItem(CAL_KEY)); if(c && Array.isArray(c.samples)) calib={on:c.on!==false, samples:c.samples.filter(calibValid).map(x=>({...x, r:Object.fromEntries(Object.entries(x.r).filter(([k,v])=>CAL_NAMES[k]&&typeof v==='number'&&v>0))}))}; }catch(e){}
+// A stored sample must have the shape calibUI reads (damaged or foreign data is dropped)
+function calibValid(x){ const num=v=>typeof v==='number'&&isFinite(v), opt=v=>v===null||v===undefined||num(v);
+  return !!x && typeof x.r==='object' && x.r!==null && num(x.t) && !!x.m && opt(x.m.M) && opt(x.m.P) && !!x.p && num(x.p.M) && (x.p.pitch===null||num(x.p.pitch)); }
 function calibSave(){ try{ localStorage.setItem(CAL_KEY,JSON.stringify(calib)); }catch(e){} }
 function calibFactors(){
   const f={};
@@ -2044,9 +2063,9 @@ function calibUI(){
   set('calibList',calib.samples.map((x,i)=>{
     const d=new Date(x.t), items=[];
     if(x.m.M) items.push('무게 '+x.p.M.toFixed(1)+'→'+x.m.M+'g');
-    if(!isNaN(x.m.P)&&x.m.P!==null) items.push('자세 '+(x.p.pitch===null?'-':x.p.pitch.toFixed(0))+'→'+x.m.P+'°');
+    if(typeof x.m.P==='number') items.push('자세 '+(x.p.pitch===null?'-':x.p.pitch.toFixed(0))+'→'+x.m.P+'°');
     for(const k in x.r) items.push(CAL_NAMES[k]+' ×'+x.r[k].toFixed(2));
-    return '<div class="calib-row"><span><b>'+x.label+'</b> · '+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+items.join(' · ')+'</span><button title="삭제" onclick="calibDel('+i+')">✕</button></div>';
+    return '<div class="calib-row"><span><b>'+String(x.label).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</b> · '+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+items.join(' · ')+'</span><button title="삭제" onclick="calibDel('+i+')">✕</button></div>';
   }).join(''));
 }
 function calibAdd(){
@@ -2310,7 +2329,8 @@ function recommendAction() {
     if(rise>0.15) why.push('부상이 빨라('+cms(rise)+') 스톱 & 고로 떠오르는 순간을 노려도 좋음');
   }
   else if(a.type==='minnow'){
-    if(rise<0.1){ tech='twitch'; pause=1.4; why.push('천천히 떠서('+cms(rise)+') 트위칭 후 포즈로 유혹'); }
+    if(sink>0){ tech='retrieve'; why.push('싱킹('+cms(sink)+'): 감으면 워블하며 잠행, 멈추면 가라앉으므로 포즈는 짧게'); }
+    else if(rise<0.1){ tech='twitch'; pause=1.4; why.push('천천히 떠서('+cms(rise)+') 트위칭 후 포즈로 유혹'); }
     else { tech='retrieve'; why.push('감으면 워블하며 잠행'); }
   }
   else if(a.type==='jerkbait'){ tech='jerk'; pause=1.8; why.push('서스펜딩: 저크 후 길게 멈춰 그 수심에 띄워 두기'); pullFromGM(); }
@@ -2555,7 +2575,7 @@ function animStep(s,a,tech,dt,opt){
   }
   else if(tech==='liftfall'){
     if(s.phase==='go'){ vT=a.rodV*1.3*pw; dT=Math.max(0,a.bottom-1.2); dRate=0.8; swim(); if(s.phaseT>=1.2){ s.phase='fall'; s.phaseT=0; } }
-    else { vT=0.12; slack=true; yawO=slow(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01){ s.phase='go'; s.phaseT=0; } }
+    else { vT=0.12; slack=true; yawO=slow(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01 || (a.freeRate<=0 && s.phaseT>=1.5*ps)){ s.phase='go'; s.phaseT=0; } } // a lure that doesn't sink never reaches the bottom: lift again after a pause
   }
   else if(tech==='stopgo'){
     const G=2.2, T=G+1.0*ps, tc=s.t%T;
