@@ -495,10 +495,11 @@ let hooks = [];
 let lineEyes = [];
 let selectedPart = null; // {type, idx}
 // Internal weights (lead): pos = % of the length back from the nose, g = mass, d = diameter (mm),
-// dp = the diameter asked for. They are kept inside the body (fitWeight): d is the fitting diameter
-// nearest to dp, so a weight thinned in a narrow spot grows back where there is room again.
+// gp / dp = the mass and diameter asked for. They are kept inside the body (fitWeight): g is the most
+// mass up to gp that fits and d the fitting diameter nearest to dp, so a weight cut down in a short body
+// grows back to what was asked for where there is room again.
 // Presets give weight/weightPos or a weights list.
-let weights = [{pos:50, g:5, d:8, dp:8}];
+let weights = [{pos:50, g:5, gp:5, d:8, dp:8}];
 let selWeight = 0; // weight edited by the sidebar sliders
 
 
@@ -683,7 +684,7 @@ function applyPreset(cat, key) {
   weights=(p.weights||[{pos:p.weightPos, g:p.weight}]).map(w=>{
     let d=w.d||autoDia(w.g);
     if(!w.d && !weightInside({...w,d},wsF,wtF)) d=WEIGHT_DIAS.slice().sort((a,b)=>Math.abs(a-d)-Math.abs(b-d)).find(x=>weightInside({...w,d:x},wsF,wtF))??d;
-    return {pos:w.pos, g:w.g, d, dp:d};
+    return {pos:w.pos, g:w.g, gp:w.g, d, dp:d};
   }); selWeight=0;
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   setCtl('coat',p.coat||0); setCtl('hardware',p.hardware||0);
@@ -760,7 +761,7 @@ function saveHGrouped(key) {
 }
 function afterStateReplaced() {
   selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
-  setWeightNote(''); drawSection();
+  setWeightNote(weightNotes()); drawSection(); // e.g. an undo back to a weight that was cut down to fit
   updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
 function undoAction() {
@@ -853,7 +854,8 @@ function scaleLengthAll(v) {
   if(prop){
     // Same lure at another size: masses follow the volume (length³), part and lip sizes the length
     const r=v/lenBase.L, half=x=>Math.round(x*2)/2;
-    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), d:Math.max(1,half(w.d*r)), dp:Math.max(1,half(w.dp*r))})); syncWeightUI();
+    weights=lenBase.weights.map(w=>({pos:w.pos, g:Math.max(0.5,half(w.g*r**3)), gp:Math.max(0.5,half((w.gp??w.g)*r**3)),
+      d:Math.max(1,half(w.d*r)), dp:Math.max(1,half((w.dp??w.d)*r))})); syncWeightUI();
     setCtl('hookWeight',half(lenBase.hookWeight*r**3));
     setCtl('coat',half(lenBase.coat*r**2)); setCtl('hardware',half(lenBase.hardware*r**3)); // coating follows the surface
     setCtl('eyeSize',half(lenBase.eyeSize*r)); setCtl('hookSize',half(lenBase.hookSize*r));
@@ -1819,25 +1821,32 @@ function diaRange(w) {
   const f=WEIGHT_DIAS.filter(d=>weightFits({pos:w.pos,g:w.g,d}));
   return f.length?{mn:f[0],mx:f[f.length-1]}:null;
 }
-// Fit weight w inside the body: the diameter moves first; if no diameter fits, the mass drops to the
-// most that fits. Returns a note when it changed w.
+// Most mass up to gMax that fits at w.pos with some diameter, in 0.5 g steps (bisection: a lighter weight
+// always fits at least as well); 0.5 g at least
+function maxFitMass(w, gMax) {
+  if(fitDia(w,gMax)!==null) return gMax;
+  let lo=0, hi=Math.ceil(gMax*2)-1;
+  while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2)!==null) lo=m; else hi=m-1; }
+  return Math.max(0.5,lo/2);
+}
+// Fit weight w between nose and tail, as near as possible to the mass and diameter asked for (gp, dp):
+// the diameter moves first, and only if no diameter fits does the mass drop to the most that fits. Both go
+// back to the asked-for values as soon as there is room again. Returns true when it changed w.
 function fitWeight(w) {
-  // A diameter changed to fit goes back toward the one asked for (dp) as soon as there is room again
-  if(w.dp!=null && w.d!==w.dp){ const d=fitDia(w,w.g); if(d!==null) w.d=d; }
-  if(weightFits(w)) return ''; // between nose and tail: nothing to report
-  const d0=w.d, g0=w.g;
-  let d=fitDia(w,w.g);
-  if(d===null){
-    // Largest fitting mass in 0.5 g steps (bisection: a lighter weight always fits at least as well)
-    let lo=0, hi=Math.round(w.g*2)-1;
-    while(lo<hi){ const m=(lo+hi+1)>>1; if(fitDia(w,m/2)!==null) lo=m; else hi=m-1; }
-    w.g=Math.max(0.5,lo/2); d=fitDia(w,w.g)??1;
-  }
-  w.d=d;
-  const i=weights.indexOf(w)+1, parts=[];
-  if(w.g!==g0) parts.push('무게 '+g0+'→'+w.g+' g');
-  if(w.d!==d0 && w.d!==w.dp) parts.push('지름 '+(w.dp??d0)+'→'+w.d+' mm');
-  return parts.length?'웨이트 '+i+': 코끝·꼬리끝 안에 맞도록 '+parts.join(', '):'';
+  const g0=w.g, d0=w.d, gp=w.gp??w.g;
+  if(w.g<gp || !weightFits(w)) w.g=maxFitMass(w,gp);
+  if(w.d!==(w.dp??w.d) || !weightFits(w)) w.d=fitDia(w,w.g)??1;
+  return w.g!==g0 || w.d!==d0;
+}
+// Warning for the weights that differ from what was asked for (cut down to fit the body), or ''
+function weightNotes() {
+  const n=weights.map((w,i)=>{
+    const parts=[];
+    if(w.gp!=null && w.g!==w.gp) parts.push('무게 '+w.gp+'→'+w.g+' g');
+    if(w.dp!=null && w.d!==w.dp) parts.push('지름 '+w.dp+'→'+w.d+' mm');
+    return parts.length?'웨이트 '+(i+1)+': '+parts.join(', '):'';
+  }).filter(Boolean);
+  return n.length?n.join(' · ')+' (코끝·꼬리끝 안에 맞도록 조정, 공간이 생기면 설정값으로 돌아옴)':'';
 }
 // Move w toward position target (%) keeping its mass and shape, and stop at the last position where it
 // still fits between nose and tail
@@ -1850,10 +1859,12 @@ function moveWeight(w, target) {
   }
   return true;
 }
+// Refit every weight; when one changed (cut down, or grown back), the note tells what still differs.
+// Otherwise the note is left as it is (e.g. "stopped at 93%" from the position slider).
 function fitWeights() {
-  const notes=weights.map(w=>fitWeight(w)).filter(Boolean);
-  if(notes.length) setWeightNote(notes.join(' · '));
-  return notes.length>0;
+  const changed=weights.map(w=>fitWeight(w)).some(Boolean);
+  if(changed) setWeightNote(weightNotes());
+  return changed;
 }
 function setWeightNote(t) { const n=document.getElementById('weightNote'); n.textContent=t?'⚠ '+t:''; n.style.display=t?'':'none'; }
 // An ellipsoid of the lead's volume: diameter d across (height and width), length from the volume
@@ -1886,16 +1897,17 @@ function setWeightProp(k, v) {
   saveHGrouped('w'+k+selWeight);
   const old=w[k]; w[k]=v;
   if(k==='d') w.dp=v;
+  if(k==='g') w.gp=v;
   // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
   if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>old?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤'); }
-  else setWeightNote(fitWeight(w));
+  else { fitWeight(w); setWeightNote(weightNotes()); }
   syncWeightUI(); render(); // physics once per frame while a slider is dragged
 }
 function addWeight() {
   if(weights.length>=8) return;
   saveH();
   const w=weights[selWeight];
-  const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, d:w.d, dp:w.dp}:{pos:50, g:5, d:autoDia(5), dp:autoDia(5)};
+  const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, gp:w.gp??w.g, d:w.d, dp:w.dp??w.d}:{pos:50, g:5, gp:5, d:autoDia(5), dp:autoDia(5)};
   // Same shape as the copied weight: at the nearest position to the target where it fits
   const want=nw.pos;
   for(let k=0;k<=90;k++){
@@ -1904,7 +1916,7 @@ function addWeight() {
     nw.pos=q; if(weightFits(nw)) break;
     nw.pos=want;
   }
-  weights.push(nw); setWeightNote(fitWeight(nw));
+  weights.push(nw); fitWeight(nw); setWeightNote(weightNotes());
   selWeight=weights.length-1; syncWeightUI(); render();
 }
 function removeWeight() {
