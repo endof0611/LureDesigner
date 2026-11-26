@@ -218,7 +218,7 @@
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
         <input type="range" min="40" max="266" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
-      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle" onchange="saveHCheck(this,true)"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">측면 높이 (mm)</span><span class="slider-value" id="sideHVal">44</span></div>
         <input type="range" min="8" max="80" value="44" id="sideHSlider" oninput="scaleSideHeight(this.value)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 너비 (mm)</span><span class="slider-value" id="topWVal">24</span></div>
@@ -485,6 +485,9 @@ let dragWeightIdx = null; // index into weights while one is dragged
 let layoutNoseX = null; // nose X frozen during a drag so the view doesn't shift under the pointer
 let isPan = false, panRef = {x:0,y:0}, panTarget = null;
 let isTouch = false; // true when using touch input
+// Undo step of the current point/part/weight drag: taken on pointer down, pushed on the first real move,
+// so a click that only selects something leaves no step and doesn't mark the preset modified
+let pendingH = null, dragMoved = false, downXY = null;
 
 // Parts: each has {x,y} in side-view coords
 let eyes = [];
@@ -591,7 +594,8 @@ let presetDirty=false; // shape or lure settings changed since the preset was lo
 const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v, coat:v=>v, hardware:v=>v,
   sectN:v=>+v<=2.05?'타원':+v>=5?'각진 '+(+v).toFixed(1):'둥근 사각 '+(+v).toFixed(1),
   sectE:v=>Math.abs(v)<0.025?'대칭':(+v>0?'배 넓음 ':'등 넓음 ')+Math.abs(v).toFixed(2),
-  lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v};
+  lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v,
+  smooth:v=>(v/100).toFixed(2)}; // curve smoothness: slider 0-100, SM = value/100
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
 function setCtl(id, v) {
@@ -608,6 +612,7 @@ function ctlState() {
 function restoreCtl(st) {
   for(const id in st.sl) setCtl(id,st.sl[id]);
   for(const id in st.ck) document.getElementById(id).checked=st.ck[id];
+  SM=document.getElementById('smoothSlider').value/100;
   const changed=st.preset.cat!==currentPreset.cat||st.preset.key!==currentPreset.key;
   currentPreset={...st.preset}; presetDirty=st.dirty;
   if(changed){ presetViewCat=currentPreset.cat; updatePresetUI(); }
@@ -642,6 +647,7 @@ function presetProfile(arr, t, T) {
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
+  setCtl('smooth',100); SM=1; // presets are drawn with the natural curve (also sets the length stretch below)
   // A preset may set its own stations; coarse ones are densified so the outline bends smoothly
   let T=p.T||PRESET_T, up=p.up, lo=p.lo, hw=p.hw;
   if(T.length<11){
@@ -733,12 +739,17 @@ function symOn(view) { return document.getElementById(view==='side'?'symSide':'s
 function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.x=f(p.x))); }
 
 // === HISTORY ===
-function saveH() {
-  undoStack.push(JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,w:weights,ws:selWeight,c:ctlState()})));
+function snapH() { return JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,w:weights,ws:selWeight,c:ctlState()})); }
+// keepDirty: a step that doesn't change the lure itself (an editing mode), so the preset isn't marked modified
+function pushH(st, keepDirty) {
+  undoStack.push(st);
   if(undoStack.length>MAX_HIST) undoStack.shift();
   lastSaveKey=null;
-  presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
+  if(!keepDirty) presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
+function saveH(keepDirty) { pushH(snapH(), keepDirty); }
+// A canvas drag records its undo step (taken on pointer down) only once something actually moves
+function dragEdited() { if(pendingH){ pushH(pendingH); pendingH=null; } dragMoved=true; }
 // One undo step per continuous slider drag instead of one per input event
 // Returns true when a new step was saved
 function saveHGrouped(key) {
@@ -937,10 +948,10 @@ function addPart(type) {
 }
 
 function removePart(type) {
+  const arr=type==='eye'?eyes:type==='hook'?hooks:lineEyes;
+  if(!arr.length) return; // nothing to remove: no undo step, preset not marked modified
   saveH();
-  if(type==='eye' && eyes.length>0) eyes.pop();
-  else if(type==='hook' && hooks.length>0) hooks.pop();
-  else if(type==='lineEye' && lineEyes.length>0) lineEyes.pop();
+  arr.pop();
   selectedPart=null;
   updatePartCounts();
   render();
@@ -964,7 +975,7 @@ function applySymTo(pts, sym) {
 }
 function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
 // The checkbox has already flipped when onchange runs: record its previous state in the undo step
-function saveHCheck(el) { saveH(); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; }
+function saveHCheck(el, keepDirty) { saveH(keepDirty); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; }
 function onSymToggle(el) { saveHCheck(el); applySym(); syncSlidersFromPoints(); render(); }
 // Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
 function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
@@ -1182,6 +1193,10 @@ function setupEvents() {
     // Unified Pointer Events (mouse + touch + pen)
     svg.addEventListener('pointerdown', function(e){
       e.preventDefault();
+      // preventDefault keeps the focus where it was: release a sidebar control, or Delete / Backspace on a
+      // selected part would go to it (and Backspace would edit a typed calibration value)
+      const ae=document.activeElement;
+      if(ae && ae.matches && ae.matches('input,textarea,select')) ae.blur();
       isTouch=(e.pointerType==='touch'||e.pointerType==='pen');
       svg.setPointerCapture(e.pointerId);
 
@@ -1306,7 +1321,7 @@ function onDown(e,view) {
         const d=Math.hypot(p.x-q.x,p.y-q.y); if(d<bestD){bestD=d;bestType=type;bestIdx=i;}
       }));
       if(bestType!==null){
-        saveH(); dragView=view; dragType='part'; dragPartType=bestType; dragPartIdx=bestIdx;
+        startDrag(e); dragView=view; dragType='part'; dragPartType=bestType; dragPartIdx=bestIdx;
         selectedPart={type:bestType,idx:bestIdx};
         render(true); return;
       }
@@ -1323,11 +1338,11 @@ function onDown(e,view) {
       }
     }
     if(ci>=0){
-      saveH(); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
+      startDrag(e); dragView=view; dragType='point'; dragIdx=ci; selectedPart=null;
       layoutNoseX=Math.max(xRange(sidePts).mx,xRange(topPts).mx);
       render(true);
     } else if(onWeight>=0){
-      saveH(); dragView=view; dragType='weight'; dragWeightIdx=onWeight; selWeight=onWeight; selectedPart=null; syncWeightUI();
+      startDrag(e); dragView=view; dragType='weight'; dragWeightIdx=onWeight; selWeight=onWeight; selectedPart=null; syncWeightUI();
       render(true);
     } else {
       const pan=view==='side'?sidePan:topPan;
@@ -1388,8 +1403,14 @@ function onMove(e,view) {
   const q=localPos(e,view);
   document.getElementById('statusCoords').textContent='X: '+q.x.toFixed(1)+' Y: '+q.y.toFixed(1)+' ['+view+']';
 
+  // A drag starts once the pointer has really moved: a click (or a tap that shakes a pixel or two)
+  // only selects, so it neither moves the item onto the pointer nor records an undo step
+  if(dragView===view && dragType!==null && !dragMoved && downXY &&
+     Math.hypot(e.clientX-downXY.x, e.clientY-downXY.y)<(isTouch?6:3)) return;
+
   // Part dragging
   if(dragView===view && dragType==='part' && dragPartIdx!==null){
+    dragEdited();
     const arr = dragPartType==='eye'?eyes : dragPartType==='hook'?hooks : lineEyes;
     arr[dragPartIdx].x=q.x;
     arr[dragPartIdx].y=q.y;
@@ -1399,8 +1420,9 @@ function onMove(e,view) {
 
   // Weight dragging: moves along the body, updating the weight-position slider (5-95%)
   if(dragView===view && dragType==='weight'){
-    const sx=xRange(sidePts), L=sx.mx-sx.mn;
-    moveWeight(weights[dragWeightIdx],Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)))); // stops where it would stick out
+    const sx=xRange(sidePts), L=sx.mx-sx.mn, w=weights[dragWeightIdx], old=w.pos;
+    moveWeight(w,Math.max(5,Math.min(95,Math.round((sx.mx-q.x)/L*100)))); // stops where it would stick out
+    if(w.pos!==old) dragEdited();
     syncWeightUI();
     render(true);
     return;
@@ -1408,6 +1430,7 @@ function onMove(e,view) {
 
   // Body point dragging
   if(dragView===view && dragType==='point' && dragIdx!==null){
+    dragEdited();
     const pts=viewPts(view);
     const other=view==='side'?'top':'side';
     const before=xRange(pts);
@@ -1429,13 +1452,16 @@ function onMove(e,view) {
   }
 }
 
+function startDrag(e) { pendingH=snapH(); dragMoved=false; downXY={x:e.clientX, y:e.clientY}; }
 function endDrag() {
   dragView=null;dragIdx=null;dragType=null;dragPartType=null;dragPartIdx=null;dragWeightIdx=null;isPan=false;panTarget=null;layoutNoseX=null;
+  pendingH=null;dragMoved=false;downXY=null;
 }
 function onUp(){
-  const changed=dragIdx!==null || dragPartIdx!==null || dragType==='weight';
+  const drag=dragType!==null, moved=dragMoved;
   endDrag();
-  if(changed){ syncSlidersFromPoints(); render(); }
+  if(moved){ syncSlidersFromPoints(); render(); }
+  else if(drag) render(true); // a click: nothing changed, only redraw without the drag state (G/B markers return)
 }
 
 // === EXPORT ===
@@ -1509,9 +1535,13 @@ function designCodeMarkup(code, sideF) {
   }
   return '';
 }
+// Hairline strokes for real-size drawings (the on-screen widths would be up to 2.5 mm thick at 1:1)
+function hairline(s) { return s.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"'); }
+// Real size, as in the print: 1 unit = 1 mm. Without units the width and height would be read as px, and
+// vector editors would import the lure at a quarter to a third of its size.
 function exportSVG() {
-  const {w,h,inner}=buildLureSVG(20,SW);
-  const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">\n'+inner+'\n</svg>';
+  const {w,h,inner}=buildLureSVG(20,0.3);
+  const out='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'mm" height="'+h+'mm" viewBox="0 0 '+w+' '+h+'">\n'+hairline(inner)+'\n</svg>';
   document.getElementById('exportContent').value=out;
   document.getElementById('exportOverlay').style.display='flex';
 }
@@ -1543,8 +1573,7 @@ function printLure() {
     '\n  <path d="M '+MX+' '+(by-2)+' V '+(by+2)+' M '+MX+' '+by+' H '+(MX+BAR)+' M '+(MX+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
     '\n  <text x="'+(MX+BAR+3)+'" y="'+(by+1.2)+'" font-size="3.5" font-family="sans-serif">50 mm</text>'+
     '\n  <text x="'+MX+'" y="'+(by+7)+'" font-size="3.5" font-family="sans-serif">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>\n</svg>';
-  // Hairline strokes on paper (the on-screen widths would be up to 1.5 mm thick)
-  document.getElementById('printArea').innerHTML=svg.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"');
+  document.getElementById('printArea').innerHTML=hairline(svg);
   // Smallest page that holds the drawing at 1:1 with 5 mm margins (A4 portrait / landscape, then A3)
   const fits=(pw,ph)=>W<=pw-10&&H<=ph-10;
   const page=fits(210,297)?'A4 portrait':fits(297,210)?'A4 landscape':fits(297,420)?'A3 portrait':'A3 landscape';
@@ -1793,7 +1822,9 @@ function diaRange(w) {
 // Fit weight w inside the body: the diameter moves first; if no diameter fits, the mass drops to the
 // most that fits. Returns a note when it changed w.
 function fitWeight(w) {
-  if(weightFits(w)) return ''; // already between nose and tail: its shape is left alone
+  // A diameter changed to fit goes back toward the one asked for (dp) as soon as there is room again
+  if(w.dp!=null && w.d!==w.dp){ const d=fitDia(w,w.g); if(d!==null) w.d=d; }
+  if(weightFits(w)) return ''; // between nose and tail: nothing to report
   const d0=w.d, g0=w.g;
   let d=fitDia(w,w.g);
   if(d===null){
@@ -1971,14 +2002,16 @@ function actionParams(o) {
 function actionText(a, tech) {
   const m=v=>v.toFixed(1)+' m', cms=v=>(v*100).toFixed(0)+' cm/s';
   const stop=a.freeRate<0?'떠오름 (약 '+cms(a.riseRate)+')':a.freeRate>0?'가라앉음 (약 '+cms(a.sinkRate)+')':'그 수심에 멈춤';
+  // The computed rest posture, with the same 5° threshold for level as the posture readout
+  const pose=Math.abs(a.restPitch)<5?'수평 자세로':a.restPitch<0?'꼬리 숙인 자세로':'머리 숙인 자세로';
   const T={
-    divingPencil:{sweep:'로드를 길고 천천히 쓸어 당기면 약 '+m(a.sweepDepth??a.diveDepth)+'까지 잠수하며 크게 롤링·좌우 S자로 헤엄, 포즈에서 꼬리 숙인 자세로 '+stop+
+    divingPencil:{sweep:'로드를 길고 천천히 쓸어 당기면 약 '+m(a.sweepDepth??a.diveDepth)+'까지 잠수하며 크게 롤링·좌우 S자로 헤엄, 포즈에서 '+pose+' '+stop+
         (a.restPitch>-12?'. 무게중심이 앞쪽이라 잠수가 얕고 수면 아래를 길게 미끄러지는 액션 위주':''),
-      jerk:'저크하면 머리부터 약 '+m(a.diveDepth)+' 잠수하며 롤링·좌우 다팅, 포즈에서 꼬리 숙인 자세로 '+stop+
+      jerk:'저크하면 머리부터 약 '+m(a.diveDepth)+' 잠수하며 롤링·좌우 다팅, 포즈에서 '+pose+' '+stop+
         (a.restPitch>-12?'. 무게중심이 앞쪽이라 잠수가 얕고 수면 아래를 미끄러지는 액션 위주':''),
       retrieve:'천천히 감으면 수면 바로 아래에서 롤링하며 S자로 헤엄'},
     topPencil:{walk:'로드를 짧고 리듬 있게 치면 머리를 좌우로 번갈아 트는 도그워크', retrieve:'그냥 감으면 수면을 미끄러지며 직진 (액션 약함)'},
-    popper:{pop:'짧게 당기면 컵이 물을 받아 팝·스플래시, 멈추면 꼬리 숙인 자세로 정지', walk:'짧게 연속으로 치면 좌우로 머리를 트는 워킹'},
+    popper:{pop:'짧게 당기면 컵이 물을 받아 팝·스플래시, 멈추면 '+pose+' 정지', walk:'짧게 연속으로 치면 좌우로 머리를 트는 워킹'},
     liplessMinnow:{retrieve:'표층 약 '+m(a.runDepth)+'에서 롤링 위주의 타이트 액션', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop},
     sinkingPencil:{retrieve:'S자 슬라이드 + 롤링, 느리게 감을수록 깊게 (약 '+m(a.runDepth)+')', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop,
       liftfall:'들어 올리면 상승, 멈추면 롤링하며 '+stop},
@@ -2310,7 +2343,9 @@ function recommendAction() {
     if(rise>0.15) why.push('부상이 빨라('+cms(rise)+') 스톱 & 고로 떠오르는 순간을 노려도 좋음');
   }
   else if(a.type==='minnow'){
-    if(rise<0.1){ tech='twitch'; pause=1.4; why.push('천천히 떠서('+cms(rise)+') 트위칭 후 포즈로 유혹'); }
+    // A lipped minnow is floating or sinking here (a suspending one is a jerkbait)
+    if(P.raw.kind==='S'){ tech='twitch'; pause=0.7; why.push('싱킹('+cms(sink)+'): 원하는 수심까지 가라앉힌 뒤 트위칭, 포즈 중에도 가라앉아 포즈는 짧게'); }
+    else if(rise<0.1){ tech='twitch'; pause=1.4; why.push('천천히 떠서('+cms(rise)+') 트위칭 후 포즈로 유혹'); }
     else { tech='retrieve'; why.push('감으면 워블하며 잠행'); }
   }
   else if(a.type==='jerkbait'){ tech='jerk'; pause=1.8; why.push('서스펜딩: 저크 후 길게 멈춰 그 수심에 띄워 두기'); pullFromGM(); }
