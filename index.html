@@ -473,7 +473,10 @@ let sidePan = {x:0,y:0}, topPan = {x:0,y:0};
 let undoStack = [];
 const MAX_HIST = 40;
 let lastSaveKey = null, lastSaveT = 0;
-let lenBase = null; // proportional mode: values at the start of a length drag, so weights scale without rounding drift
+// Proportional mode: the exact values when the length first changed. Kept through any number of length
+// changes (separate drags too) until another edit, so masses always scale from the same values and a
+// round trip (200 → 100 → 200 mm) gives the lure back instead of piling up the 0.5 g rounding.
+let lenBase = null, lenEditing = false;
 
 // Drag state
 let dragView = null; // 'side' or 'top'
@@ -648,6 +651,7 @@ function presetProfile(arr, t, T) {
 
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
+  if(cat!==currentPreset.cat || key!==currentPreset.key) calibClear(); // measurements of the previous lure
   setCtl('smooth',100); SM=1; // presets are drawn with the natural curve (also sets the length stretch below)
   // A preset may set its own stations; coarse ones are densified so the outline bends smoothly
   let T=p.T||PRESET_T, up=p.up, lo=p.lo, hw=p.hw;
@@ -746,6 +750,7 @@ function pushH(st, keepDirty) {
   undoStack.push(st);
   if(undoStack.length>MAX_HIST) undoStack.shift();
   lastSaveKey=null;
+  if(!lenEditing) lenBase=null; // any other edit: the next length change scales from the values as they are then
   if(!keepDirty) presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
 function saveH(keepDirty) { pushH(snapH(), keepDirty); }
@@ -760,7 +765,7 @@ function saveHGrouped(key) {
   return fresh;
 }
 function afterStateReplaced() {
-  selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base
+  selectedPart=null; lastSaveKey=null; lenBase=null; // the next slider drag starts a fresh undo group / scaling base (undo, preset)
   setWeightNote(weightNotes()); drawSection(); // e.g. an undo back to a weight that was cut down to fit
   updatePartCounts(); updatePtsSliders(); syncWeightUI(); syncSlidersFromPoints(); render();
 }
@@ -770,7 +775,7 @@ function undoAction() {
   sidePts=h.s; topPts=h.t; eyes=h.e; hooks=h.h; lineEyes=h.l; weights=h.w; selWeight=h.ws;
   const presetChanged=restoreCtl(h.c);
   afterStateReplaced();
-  if(presetChanged) resetView();
+  if(presetChanged){ resetView(); calibClear(); }
 }
 // Back to the selected preset
 function resetShape() { saveH(); applyPreset(currentPreset.cat, currentPreset.key); }
@@ -833,11 +838,11 @@ function changePts(view, n) {
 function scaleLengthAll(v) {
   v=parseInt(v); document.getElementById('lenVal').textContent=v;
   const prop=document.getElementById('propToggle').checked;
-  if(lastSaveKey!=='len'||Date.now()-lastSaveT>800||!lenBase){
+  if(!lenBase){
     const r=drawnRange('side').x, val=id=>parseFloat(document.getElementById(id+'Slider').value);
     lenBase={L:r.mx-r.mn, weights:weights.map(w=>({...w})), hookWeight:val('hookWeight'), coat:val('coat'), hardware:val('hardware'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
-  saveHGrouped('len');
+  lenEditing=true; saveHGrouped('len'); lenEditing=false; // this undo step keeps the scaling base
   // Same factor for both views, so their lengths stay linked; anchored at the nose (max X).
   // Proportional mode scales height/width (and side-view parts) too: a similarity, exact in one step.
   // A length-only stretch changes how far the curve rounds past the tail, so it is refined until the
@@ -915,10 +920,15 @@ function matchXRange(view, ref) {
   mapX(view,x=>r.mx+(x-v.mx)*refLen/len);
   return true;
 }
-// Sync to side: scale top X range to match side, nose aligned
-function syncToSide() { saveH(); if(!matchXRange('top','side')){undoStack.pop();return;} syncSlidersFromPoints(); render(); }
-// Sync to top: scale side X range to match top, nose aligned
-function syncToTop() { saveH(); if(!matchXRange('side','top')){undoStack.pop();return;} syncSlidersFromPoints(); render(); }
+// Scale one view's X range to the other's, nose aligned. Editing keeps both lengths equal, so this usually
+// has nothing to do: then it records no undo step and doesn't mark the preset modified.
+function syncLengthTo(view, ref) {
+  const r=xRange(viewPts(ref)), v=xRange(viewPts(view));
+  if(r.mx-r.mn<1 || v.mx-v.mn<1 || (Math.abs(r.mn-v.mn)<0.01 && Math.abs(r.mx-v.mx)<0.01)) return;
+  saveH(); matchXRange(view,ref); syncSlidersFromPoints(); render();
+}
+function syncToSide() { syncLengthTo('top','side'); } // top view to the side view's length
+function syncToTop() { syncLengthTo('side','top'); }  // side view to the top view's length
 
 function syncSlidersFromPoints() {
   forceSyncLength();
@@ -972,6 +982,9 @@ function applySymTo(pts, sym) {
   if(sym){
     const half=Math.floor(n/2);
     for(let i=1;i<half;i++){ const m=n-1-i; pts[m].x=pts[i].x; pts[m].y=-pts[i].y; }
+    // Points on the mirror axis stay on it (they only slide along the length): the nose, and the tail
+    // point when the count is odd. Off the axis they would bend a symmetric outline.
+    pts[0].y=0; if(n%2) pts[half].y=0;
   }
   pts[n-1].x=pts[0].x; pts[n-1].y=pts[0].y;
 }
@@ -1513,29 +1526,42 @@ function designCode() {
   return PRESETS[currentPreset.cat].items[currentPreset.key].name+'/'+lastPhys.buoyCode+'/L'+Math.round(L)+'/W'+g+'/B'+Math.round(W)+'/H'+Math.round(H);
 }
 // The code as SVG text inside the side-view body: the largest size (up to 3 mm) whose whole box stays inside
-// the outline with a margin and clear of the eyes, as near the middle of the length as possible. A body too
-// small for 1.2 mm text gets none (the print label still carries the code).
+// the outline with a margin and clear of the eyes and the weights, as near the middle of the length (then of
+// the height) as possible. If no size clears the weights, it may cross them (a dashed outline) rather than be
+// left out. A body too small for 1.2 mm text gets none (the print label still carries the code).
 function designCodeMarkup(code, sideF) {
   if(!code) return '';
   const sx=xRange(sidePts), L=sx.mx-sx.mn, mid=(sx.mn+sx.mx)/2, MARGIN=0.6;
   const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
   const hitsEye=(cx,cy,w,h)=>eyes.some(e=>{ const dx=Math.max(Math.abs(e.x-cx)-w/2,0), dy=Math.max(Math.abs(e.y-cy)-h/2,0); return dx*dx+dy*dy<(eyeR+MARGIN)**2; });
-  for(let fs=3; fs>=1.2; fs-=0.1){
-    const w=code.length*0.62*fs, h=fs*0.8; // monospace advance ≈ 0.6 em; digit height ≈ 0.75 em
-    let best=null;
-    for(let k=0;k<=80;k++){
-      const cx=sx.mn+L*k/80;
-      if(cx-w/2<sx.mn+MARGIN || cx+w/2>sx.mx-MARGIN) continue;
-      let lo=-Infinity, hi=Infinity; // vertical room shared by the whole width of the text
-      for(let j=0;j<=10 && lo<hi;j++){ const sp=spanAt(sideF,cx-w/2+w*j/10); if(!sp){ lo=Infinity; break; } lo=Math.max(lo,sp.mn); hi=Math.min(hi,sp.mx); }
-      if(hi-lo<h+2*MARGIN) continue;
-      const cy=(lo+hi)/2;
-      if(hitsEye(cx,cy,w,h)) continue;
-      if(!best || Math.abs(cx-mid)<Math.abs(best.cx-mid)) best={cx,cy};
+  // Box against a weight ellipse grown by the margin: scaled by its radii the ellipse is the unit circle and
+  // the box stays a box, so they meet when the box's nearest point is within 1
+  const ws=weights.map(w=>{ const p=weightPlacement(sideF,w), s=weightShape(w); return {x:p.x, z:p.z, rx:s.rx+MARGIN, ry:s.ry+MARGIN}; });
+  const hitsWeight=(cx,cy,w,h)=>ws.some(e=>{ const dx=Math.max(Math.abs(e.x-cx)-w/2,0)/e.rx, dy=Math.max(Math.abs(e.z-cy)-h/2,0)/e.ry; return dx*dx+dy*dy<1; });
+  const place=avoidWeights=>{
+    for(let fs=3; fs>=1.2-1e-9; fs-=0.1){
+      const w=code.length*0.62*fs, h=fs*0.8; // monospace advance ≈ 0.6 em; digit height ≈ 0.75 em
+      let best=null;
+      for(let k=0;k<=80;k++){
+        const cx=sx.mn+L*k/80, dx=Math.abs(cx-mid);
+        if(cx-w/2<sx.mn+MARGIN || cx+w/2>sx.mx-MARGIN || (best && dx>best.dx)) continue;
+        let lo=-Infinity, hi=Infinity; // vertical room shared by the whole width of the text
+        for(let j=0;j<=10 && lo<hi;j++){ const sp=spanAt(sideF,cx-w/2+w*j/10); if(!sp){ lo=Infinity; break; } lo=Math.max(lo,sp.mn); hi=Math.min(hi,sp.mx); }
+        const room=(hi-lo-h)/2-MARGIN, c0=(lo+hi)/2; // how far the text may move up or down from the middle
+        if(!(room>=0)) continue;
+        // From the middle of the height outwards (0.2 mm steps), the first spot clear of eyes and weights
+        for(let off=0; off<=room+1e-9; off+=0.2){
+          const cy=[c0-off,c0+off].find(y=>!hitsEye(cx,y,w,h) && !(avoidWeights && hitsWeight(cx,y,w,h)));
+          if(cy===undefined) continue;
+          if(!best || dx<best.dx || off<best.off) best={cx,cy,dx,off};
+          break;
+        }
+      }
+      if(best) return '\n    <text class="design-code" x="'+r2(best.cx)+'" y="'+r2(best.cy+h/2)+'" font-size="'+r2(fs)+'" font-family="monospace" font-weight="700" text-anchor="middle" fill="#1e293b">'+code+'</text>';
     }
-    if(best) return '\n    <text class="design-code" x="'+r2(best.cx)+'" y="'+r2(best.cy+h/2)+'" font-size="'+r2(fs)+'" font-family="monospace" font-weight="700" text-anchor="middle" fill="#1e293b">'+code+'</text>';
-  }
-  return '';
+    return '';
+  };
+  return place(true) || place(false);
 }
 // Hairline strokes for real-size drawings (the on-screen widths would be up to 2.5 mm thick at 1:1)
 function hairline(s) { return s.replace(/stroke-width="([\d.]+)"/g,(m,v)=>'stroke-width="'+Math.min(+v,0.3)+'"'); }
@@ -2106,11 +2132,18 @@ function calibAdd(){
   if(!Object.keys(ratio).length && !(m.M>0) && isNaN(m.P)){ msg('입력한 측정값이 없습니다.'); return; }
   calib.samples.push({t:Date.now(), label:r.label, type:r.type, speed:r.speed, r:ratio,
     m:{M:m.M>0?m.M:null, P:isNaN(m.P)?null:m.P}, p:{M:r.M, pitch:r.pitch}});
-  calibSave(); calcPhysics();
+  calibSave(); calibClear(); calcPhysics(); // cleared so a second click can't record the same measurement twice
   const ks=Object.keys(ratio);
   msg(ks.length?'저장했습니다: '+ks.map(k=>CAL_NAMES[k]+' ×'+ratio[k].toFixed(2)).join(', ')+'. 예측에 반영됐습니다.':'저장했습니다 (무게·자세는 비교 기록만 하고 보정 계수에는 쓰지 않습니다).');
 }
 function calibDel(i){ calib.samples.splice(i,1); calibSave(); calcPhysics(); }
+// Typed measurements belong to the lure they were taken from: cleared once saved, and when another preset
+// is loaded (or an undo returns to one), so they are never compared with or saved against a different lure
+function calibClear(){
+  ['calM','calP','calV','calD','calW','calC'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('calPDir').value='-1';
+  document.getElementById('calibMsg').textContent='';
+}
 // Set the body density so the predicted total mass equals the measured one
 function calibFitDensity(){
   const r=lastPhys&&lastPhys.raw, m=calibInputs(), msg=t=>document.getElementById('calibMsg').textContent=t;
