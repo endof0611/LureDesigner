@@ -1598,8 +1598,10 @@ function printLure() {
       '\n  <text x="'+r2(noseX+2)+'" y="2.6" font-size="2.4" font-family="sans-serif" fill="#555">cm</text>\n  '+nums;
   }
   const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
-  // The page is as wide as the drawing or the label line, whichever is longer (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em)
-  const W=Math.max(w, r2(2*MX+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)));
+  // The page is as wide as the drawing, the label line or the "cm" unit right of the nose, whichever reaches
+  // furthest (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em; "cm" ≈ 1.35 em of 2.4 mm). Without the unit's room it
+  // fell off the page when nothing sticks out ahead of the nose (no line eye or lip there).
+  const W=Math.max(w, r2(2*MX+[...label].reduce((s,ch)=>s+(ch.charCodeAt(0)<128?0.55:1)*3.5,0)), r2(noseX+2+1.35*2.4+MX));
   const body=grid?inner.replace(/fill="#ffffff" stroke="#000000"/g,'fill="none" stroke="#000000"'):inner;
   const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'mm" height="'+H+'mm" viewBox="0 0 '+W+' '+H+'">'+grid+'\n'+body+
     '\n  <path d="M '+MX+' '+(by-2)+' V '+(by+2)+' M '+MX+' '+by+' H '+(MX+BAR)+' M '+(MX+BAR)+' '+(by-2)+' V '+(by+2)+'" stroke="#000" stroke-width="0.3" fill="none"/>'+
@@ -2593,7 +2595,9 @@ function newSim(a,tech,live,opt){
   const dpw=Math.min(1.5,Math.pow(opt.power,0.7));
   const reach={jerk:a.diveDepth*dpw, sweep:(a.sweepDepth??a.diveDepth)*dpw, twitch:a.twitchDepth*dpw, liftfall:a.bottom}[tech]??(a.surface?0:a.runDepth);
   const shown=Math.min(3,Math.max(0.8,Math.max(reach,a.startDepth)*1.3+0.2)); // metres shown below the surface
-  return {live, shown, nose:xRange(sidePts).mx/1000, t:0, x:0, lat:0, d:a.startDepth, v:0, vd:0, head:0, yaw:0,
+  // nose: how far ahead of the lure's position its head is drawn, in metres of the water (the lure is drawn
+  // enlarged, at animLureScale() px per mm against PX_M px per m), so rings and splashes start at the head
+  return {live, shown, nose:xRange(sidePts).mx*animLureScale()/PX_M, t:0, x:0, lat:0, d:a.startDepth, v:0, vd:0, head:0, yaw:0,
     pitch:a.restPitch, pv:0, roll:0, ph:0, hz:0, phase:'go', phaseT:0, n:0, k:-1, maxD:a.startDepth, peakV:0,
     hist:[], splash:[], bubbles:[], rings:[], gh:[], ghT:0, ser:[], serT:0, bubAcc:0};
 }
@@ -2613,10 +2617,19 @@ function animLoop(ts){
   animRAF=requestAnimationFrame(animLoop);
 }
 
-function animRing(s){ if(s.live && s.d<0.15) s.rings.push({x:s.x+s.nose, lat:s.lat, age:0}); }
+// Drawing scale of the lure in the preview (px per mm): life size would be a few pixels, so it is enlarged
+function animLureScale(){ return Math.min(0.7,140/lastPhys.L); }
+// Where the head is drawn right now, in water coordinates: ahead along the length (shortened by pitch and
+// yaw, as the drawing is) and to the side by the yaw
+function animHeadAt(s,k){
+  const rad=Math.PI/180, f=k??1;
+  return {x:s.x+s.nose*f*Math.cos(s.pitch*rad)*Math.cos(s.yaw*rad), lat:s.lat+s.nose*f*PX_M*Math.sin(s.yaw*rad)/LAT_PX};
+}
+function animRing(s){ if(s.live && s.d<0.15){ const h=animHeadAt(s); s.rings.push({x:h.x, lat:h.lat, age:0}); } }
 function animSplash(s){
   if(!s.live) return;
-  for(let i=0;i<14;i++) s.splash.push({x:s.x+s.nose+0.01, h:0, vx:0.1+Math.random()*0.5, vh:0.4+Math.random()*0.7, life:0.5+Math.random()*0.3});
+  const h=animHeadAt(s);
+  for(let i=0;i<14;i++) s.splash.push({x:h.x+0.01, h:0, vx:0.1+Math.random()*0.5, vh:0.4+Math.random()*0.7, life:0.5+Math.random()*0.3});
 }
 
 // One time step (s) of the technique: target speed, depth and heading, then the dynamics
@@ -2731,7 +2744,7 @@ function animStep(s,a,tech,dt,opt){
   if(s.ghT>=0.05){ s.ghT=0; s.gh.push({x:s.x, d:s.d, lat:s.lat, pitch:s.pitch, yaw:s.yaw, roll:s.roll}); if(s.gh.length>4) s.gh.shift(); }
   if(s.d>0.05){ // bubbles shed by a lure working under water
     s.bubAcc+=dt*(s.v*9+Math.abs(s.vd)*4);
-    while(s.bubAcc>=1){ s.bubAcc--; s.bubbles.push({x:s.x+s.nose*(0.1+Math.random()*0.8), d:s.d, vd:-(0.12+Math.random()*0.14), life:1+Math.random()*0.8, r:1+Math.random()*1.8}); }
+    while(s.bubAcc>=1){ s.bubAcc--; s.bubbles.push({x:animHeadAt(s,0.1+Math.random()*0.8).x, d:s.d, vd:-(0.12+Math.random()*0.14), life:1+Math.random()*0.8, r:1+Math.random()*1.8}); }
   }
   for(const b of s.bubbles){ b.life-=dt; b.d+=b.vd*dt; if(b.d<0) b.life=0; }
   s.bubbles=s.bubbles.filter(b=>b.life>0);
@@ -2770,7 +2783,7 @@ function drawAnimation(){
 function drawPane(ctx,s,side,y0,ch){
   const cw=ANIM_W, ph=lastPhys, a=ph.act, rad=Math.PI/180, refOk=animRefOk();
   ctx.save(); ctx.beginPath(); ctx.rect(0,y0,cw,ch); ctx.clip(); ctx.translate(0,y0);
-  const X0=cw*0.5, sc=Math.min(0.7,140/ph.L), toX=x=>X0+(x-s.x)*PX_M, DPX=(ch-WATER_Y-24)/s.shown;
+  const X0=cw*0.5, sc=animLureScale(), toX=x=>X0+(x-s.x)*PX_M, DPX=(ch-WATER_Y-24)/s.shown;
   const noseR=xRange(sidePts).mx*sc;
   const yOf=h=>side?WATER_Y+h.d*DPX:Math.max(30,Math.min(ch-30,ch/2+h.lat*LAT_PX));
   ctx.font="12px "+MONO;
@@ -2843,7 +2856,11 @@ function drawPane(ctx,s,side,y0,ch){
   s.gh.forEach((g,i)=>lureAt(g,0.05+0.05*i));
   const T=lureAt(s,1);
   // Surface wake arcs in the top view
-  if(!side && s.d<0.02 && s.v>0.05){ ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(X0+xRange(topPts).mx*sc, T.y, 6*k+(s.t*20%6), -Math.PI/3, Math.PI/3); ctx.stroke(); } }
+  if(!side && s.d<0.02 && s.v>0.05){ // at the head, facing where it heads
+    const hr=xRange(topPts).mx*sc, hx=T.x+Math.cos(T.ang)*hr, hy=T.y+Math.sin(T.ang)*hr;
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1;
+    for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.arc(hx, hy, 6*k+(s.t*20%6), T.ang-Math.PI/3, T.ang+Math.PI/3); ctx.stroke(); }
+  }
   // Centre of gravity (G) and buoyancy (B), plus the vertical through G (side view)
   if(animShowCG){
     const loc=(lx,lz)=>({x:T.x+lx*T.sx*Math.cos(T.ang)-lz*T.sy*Math.sin(T.ang), y:T.y+lx*T.sx*Math.sin(T.ang)+lz*T.sy*Math.cos(T.ang)});
@@ -2919,52 +2936,43 @@ function traceBody(ctx, pts, sc){
   ctx.fill();ctx.stroke();
 }
 
+// The lip as the editor draws it (lipGeom: same length, angle and 6 mm root half-width), scaled by sc
+function drawLip(ctx,nx,ny,len,ang,sc){
+  const path=new Path2D(lipGeom(nx*sc, ny*sc, len*sc, ang, 6*sc).d);
+  ctx.fillStyle='rgba(200,230,255,0.2)';ctx.strokeStyle=SC;ctx.lineWidth=0.8;
+  ctx.fill(path);ctx.stroke(path);
+}
+// Eye radius in the preview: the eye size setting (mm, as in the editor), at least a visible dot
+function animEyeR(sc){ return Math.max(1.2,parseFloat(document.getElementById('eyeSizeSlider').value)*sc); }
+
 function drawLureSide(ctx,ph,sc){
   traceBody(ctx,sidePts,sc);
 
-  // Eye
+  // Eye (pupil placed as in the editor)
   if(eyes.length>0){
-    const e=eyes[0];
-    ctx.beginPath();ctx.arc(e.x*sc,e.y*sc,3.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.stroke();
-    ctx.beginPath();ctx.arc(e.x*sc+0.5,(e.y-0.5)*sc,1.8,0,Math.PI*2);ctx.fillStyle='#111';ctx.fill();
+    const e=eyes[0], R=animEyeR(sc);
+    ctx.beginPath();ctx.arc(e.x*sc,e.y*sc,R,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.arc(e.x*sc+R*0.12,e.y*sc-R*0.1,R*0.55,0,Math.PI*2);ctx.fillStyle='#111';ctx.fill();
   }
 
-  // Lip
-  if(ph.hasLip){
-    const ll=ph.lipLen*sc*0.7, la=ph.lipAng*Math.PI/180;
-    const nx=sidePts[0].x*sc, ny=sidePts[0].y*sc; // lip root = nose point
-    ctx.beginPath();
-    ctx.moveTo(nx,ny+5*sc);
-    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),ny+5*sc+ll*0.5*Math.sin(la), nx+ll*Math.cos(la),ny+ll*Math.sin(la));
-    ctx.quadraticCurveTo(nx+ll*0.5*Math.cos(la),ny-5*sc+ll*0.5*Math.sin(la), nx,ny-5*sc);
-    ctx.fillStyle='rgba(200,230,255,0.2)';ctx.strokeStyle=SC;ctx.lineWidth=0.8;
-    ctx.fill();ctx.stroke();
-  }
+  // Lip, rooted at the nose point
+  if(ph.hasLip) drawLip(ctx, sidePts[0].x, sidePts[0].y, ph.lipLen, ph.lipAng*Math.PI/180, sc);
 }
 
 function drawLureTop(ctx,ph,sc){
   traceBody(ctx,topPts,sc);
   const nose=topPts[0].x;
 
-  // Eyes on both flanks, at the eye's position along the body
+  // Eyes on both flanks, at the eye's position along the body (seen edge-on, so smaller)
   if(eyes.length>0){
-    const ex=eyes[0].x, s=spanAt(flattenSmooth(topPts,SM,8),ex), half=s?(s.mx-s.mn)/2:0;
+    const ex=eyes[0].x, s=spanAt(flattenSmooth(topPts,SM,8),ex), half=s?(s.mx-s.mn)/2:0, R=Math.max(1,animEyeR(sc)*0.6);
     for(const side of [-1,1]){
-      ctx.beginPath();ctx.arc(ex*sc,side*half*0.8*sc,2.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=0.8;ctx.stroke();
+      ctx.beginPath();ctx.arc(ex*sc,side*half*0.8*sc,R,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=0.8;ctx.stroke();
     }
   }
 
-  // Lip from top
-  if(ph.hasLip){
-    const ll=ph.lipLen*sc*0.6;
-    ctx.beginPath();
-    ctx.moveTo(nose*sc,-4*sc);
-    ctx.lineTo(nose*sc+ll,0);
-    ctx.lineTo(nose*sc,4*sc);
-    ctx.closePath();
-    ctx.fillStyle='rgba(200,230,255,0.2)';ctx.strokeStyle=SC;ctx.lineWidth=0.8;
-    ctx.fill();ctx.stroke();
-  }
+  // Lip from above: its plan shape, as long as it reaches forward (length × cos angle)
+  if(ph.hasLip) drawLip(ctx, nose, 0, ph.lipLen*Math.cos(ph.lipAng*Math.PI/180), 0, sc);
 }
 
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
