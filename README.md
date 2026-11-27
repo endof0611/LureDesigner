@@ -383,3 +383,4 @@
 | 반응형 | 768px 이하 모바일, 769~1024px 태블릿, 1025px 이상 데스크톱 |
 | 저장 | 브라우저 localStorage: 액션 미리보기 기준, 실측 보정 기록 |
 | 히스토리 | 최대 40단계 실행취소 |
+| 테스트 | Playwright(Chromium) 회귀 테스트 `tests/`, `npm test`로 실행. PR과 `main` 푸시마다 GitHub Actions에서 자동 실행 ([tests/README.md](tests/README.md)) |

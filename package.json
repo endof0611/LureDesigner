@@ -1,0 +1,11 @@
+{
+  "name": "lure-designer",
+  "private": true,
+  "description": "Minnow lure designer (single index.html) with its browser regression tests",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
