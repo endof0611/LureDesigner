@@ -21,9 +21,10 @@ test('proportional: masses past a slider\'s range are kept, and the range return
   await page.evaluate(() => { applyPreset('biggame', 'rapido'); setCtl('hookWeight', 12); setCtl('coat', 15); setCtl('hardware', 25); calcPhysics(); undoStack = []; });
   const m200 = await page.evaluate(() => lastPhys.raw.M.toFixed(1));
   await len(page, 266);
-  const at266 = await page.evaluate(() => ['hookWeight', 'coat', 'hardware', 'eyeSize', 'hookSize'].map(id => document.getElementById(id + 'Slider').value));
-  expect(at266.slice(0, 3)).toEqual(['28', '26.5', '59']);        // 12 g × (266/200)³, 15 g × (266/200)², 25 g × (266/200)³
-  expect(+at266[4]).toBeLessThanOrEqual(6);                        // drawn hook-eye size stays within its range (keeps 266 mm on A4)
+  // the design values (what the physics and drawing use) and their sliders
+  const at266 = await page.evaluate(() => ['hookWeight', 'coat', 'hardware', 'hookSize'].map(id => [design[id], document.getElementById(id + 'Slider').value]));
+  expect(at266.slice(0, 3)).toEqual([[28, '28'], [26.5, '26.5'], [59, '59']]); // 12 g × (266/200)³, 15 g × (266/200)², 25 g × (266/200)³
+  expect(at266[3][0]).toBeLessThanOrEqual(6);                                  // drawn hook-eye size stays within its range (keeps 266 mm on A4)
   await len(page, 200);
   expect(await page.evaluate(() => [document.getElementById('hookWeightSlider').value, document.getElementById('hookWeightSlider').max, lastPhys.raw.M.toFixed(1)]))
     .toEqual(['12', '15', m200]);

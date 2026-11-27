@@ -225,7 +225,7 @@
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
         <input type="range" min="40" max="266" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
-      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle" onchange="saveHCheck(this,true)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle" onchange="onCheck('prop',this,true)"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">측면 높이 (mm)</span><span class="slider-value" id="sideHVal">44</span></div>
         <input type="range" min="8" max="80" value="44" id="sideHSlider" oninput="scaleSideHeight(this.value)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 너비 (mm)</span><span class="slider-value" id="topWVal">24</span></div>
@@ -234,9 +234,9 @@
       <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
         <div style="flex:1">
           <div class="slider-group"><div class="slider-header"><span class="control-label">단면 각짐</span><span class="slider-value" id="sectNVal">타원</span></div>
-            <input type="range" min="2" max="6" value="2" step="0.1" id="sectNSlider" oninput="document.getElementById('sectNVal').textContent=CTL_FMT.sectN(this.value);drawSection();render()"></div>
+            <input type="range" min="2" max="6" value="2" step="0.1" id="sectNSlider" oninput="onCtlInput('sectN',this)"></div>
           <div class="slider-group" style="margin-bottom:0"><div class="slider-header"><span class="control-label">단면 계란형</span><span class="slider-value" id="sectEVal">대칭</span></div>
-            <input type="range" min="-0.4" max="0.4" value="0" step="0.05" id="sectESlider" oninput="document.getElementById('sectEVal').textContent=CTL_FMT.sectE(this.value);drawSection();render()"></div>
+            <input type="range" min="-0.4" max="0.4" value="0" step="0.05" id="sectESlider" oninput="onCtlInput('sectE',this)"></div>
         </div>
         <svg id="sectPreview" width="64" height="76" viewBox="-32 -38 64 76" style="flex-shrink:0;background:var(--bg);border-radius:6px"></svg>
       </div>
@@ -247,18 +247,18 @@
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 포인트 수</span><span class="slider-value" id="topPtsVal">16</span></div>
         <input type="range" min="8" max="32" value="16" id="topPtsSlider" onchange="changePts('top',this.value)" oninput="document.getElementById('topPtsVal').textContent=this.value"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">곡선 부드러움</span><span class="slider-value" id="smoothVal">1.00</span></div>
-        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="SM=this.value/100;document.getElementById('smoothVal').textContent=SM.toFixed(2);syncSlidersFromPoints();render()"></div>
+        <input type="range" min="0" max="100" value="100" id="smoothSlider" oninput="onCtlInput('smooth',this)"></div>
       </details>
       </div>
     </div>
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">립 (Lip)</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="saveHCheck(this);render()"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">립 표시</span><label class="toggle"><input type="checkbox" id="lipToggle" onchange="onCheck('lip',this)"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 길이</span><span class="slider-value" id="lipLenVal">30</span></div>
-        <input type="range" min="5" max="80" value="30" id="lipLenSlider" oninput="document.getElementById('lipLenVal').textContent=this.value;render()"></div>
+        <input type="range" min="5" max="80" value="30" id="lipLenSlider" oninput="onCtlInput('lipLen',this)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">립 각도</span><span class="slider-value" id="lipAngVal">35°</span></div>
-        <input type="range" min="0" max="80" value="35" id="lipAngSlider" oninput="document.getElementById('lipAngVal').textContent=this.value+'°';render()"></div>
+        <input type="range" min="0" max="80" value="35" id="lipAngSlider" oninput="onCtlInput('lipAng',this)"></div>
       </div>
     </div>
     <div class="panel collapsed">
@@ -271,9 +271,9 @@
       <div class="control-row"><span class="control-label">🔗 라인 아이 (<span id="lineEyeCount">0</span>개)</span>
         <div style="display:flex;gap:4px"><button class="btn" style="padding:4px 10px;font-size:11px" onclick="addPart('lineEye')">+</button><button class="btn" style="padding:4px 10px;font-size:11px" onclick="removePart('lineEye')">−</button></div></div>
       <div class="slider-group" style="margin-top:10px"><div class="slider-header"><span class="control-label">눈 크기</span><span class="slider-value" id="eyeSizeVal">4</span></div>
-        <input type="range" min="2" max="10" value="4" step="0.5" id="eyeSizeSlider" oninput="document.getElementById('eyeSizeVal').textContent=this.value;render()"></div>
+        <input type="range" min="2" max="10" value="4" step="0.5" id="eyeSizeSlider" oninput="onCtlInput('eyeSize',this)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅/아이 크기</span><span class="slider-value" id="hookSizeVal">2.5</span></div>
-        <input type="range" min="1" max="6" value="2.5" step="0.5" id="hookSizeSlider" oninput="document.getElementById('hookSizeVal').textContent=this.value;render()"></div>
+        <input type="range" min="1" max="6" value="2.5" step="0.5" id="hookSizeSlider" oninput="onCtlInput('hookSize',this)"></div>
       </div>
     </div>
     <div class="panel collapsed">
@@ -299,22 +299,22 @@
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">소재·부속</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">소재 밀도 (g/cm³)</span><span class="slider-value" id="densityVal">0.50</span></div>
-        <input type="range" min="0.1" max="2.0" value="0.5" step="0.01" id="densitySlider" oninput="document.getElementById('densityVal').textContent=parseFloat(this.value).toFixed(2);render()"></div>
+        <input type="range" min="0.1" max="2.0" value="0.5" step="0.01" id="densitySlider" oninput="onCtlInput('density',this)"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">바디 평균 밀도 · 발사 0.15 | 오동 0.3 | 중공 ABS 0.5~0.7</span></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">훅+링 무게 (훅 아이당 g)</span><span class="slider-value" id="hookWeightVal">1.5</span></div>
-        <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="document.getElementById('hookWeightVal').textContent=this.value;render()"></div>
+        <input type="range" min="0" max="15" value="1.5" step="0.5" id="hookWeightSlider" oninput="onCtlInput('hookWeight',this)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">코팅·도장 무게 (g)</span><span class="slider-value" id="coatVal">0</span></div>
-        <input type="range" min="0" max="20" value="0" step="0.5" id="coatSlider" oninput="document.getElementById('coatVal').textContent=this.value;render()"></div>
+        <input type="range" min="0" max="20" value="0" step="0.5" id="coatSlider" oninput="onCtlInput('coat',this)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">와이어·래틀 등 내부 부속 (g)</span><span class="slider-value" id="hardwareVal">0</span></div>
-        <input type="range" min="0" max="30" value="0" step="0.5" id="hardwareSlider" oninput="document.getElementById('hardwareVal').textContent=this.value;render()"></div>
+        <input type="range" min="0" max="30" value="0" step="0.5" id="hardwareSlider" oninput="onCtlInput('hardware',this)"></div>
       <div class="control-row"><span class="control-label" style="font-size:10px;color:var(--text-dim)">코팅은 바디 표면에 고르게 (에폭시 1.15 g/cm³, 부피만큼 부력 증가) · 부속은 바디 중심축을 따라 고르게 (바디 안이라 부피 추가 없음) · 바닷물 기준</span></div>
       </div>
     </div>
     <div class="panel collapsed">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">화면 설정 (대칭 · 표시)</div>
       <div class="panel-body">
-      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onSymToggle(this)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onCheck('symSide',this)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onCheck('symTop',this)"><span class="toggle-slider"></span></label></div>
       <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
       <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
       </div>
@@ -601,22 +601,52 @@ let currentPreset={cat:'seabass', key:'minnow'};
 let presetViewCat='seabass';
 let presetDirty=false; // shape or lure settings changed since the preset was loaded
 
-// Sidebar controls a preset sets; they are saved in the undo history together with the shape
-const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v, coat:v=>v, hardware:v=>v,
-  sectN:v=>+v<=2.05?'타원':+v>=5?'각진 '+(+v).toFixed(1):'둥근 사각 '+(+v).toFixed(1),
-  sectE:v=>Math.abs(v)<0.025?'대칭':(+v>0?'배 넓음 ':'등 넓음 ')+Math.abs(v).toFixed(2),
-  lipLen:v=>v, lipAng:v=>v+'°', eyeSize:v=>v, hookSize:v=>v,
-  smooth:v=>(v/100).toFixed(2)}; // curve smoothness: slider 0-100, SM = value/100
-const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
-const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
-// Sliders whose values the physics reads: a value set past their range widens it (fitRange). The eye and
-// hook-eye ring sizes only draw the parts and stay within their ranges, which also keeps the drawing of every
+// === DESIGN STATE ===
+// The lure settings the sidebar edits live in `design`, not in the controls: the physics, drawing, print and
+// undo read this object, and each slider / checkbox only shows its value and reports the user's changes, so a
+// control's range or step can't leak into the results. Values are in the controls' units (smooth: 0-100;
+// SM = smooth / 100 is kept for the curve code). A preset sets them; they are saved in the undo history
+// together with the shape.
+const design={};
+// Slider settings: id → label format. 'widen': a value the physics reads (masses, lip length) is kept as set,
+// even past its slider's range, and the slider widens to show it (fitRange). The others are held to their
+// slider's range: the eye and hook-eye ring sizes only draw the parts, which also keeps the drawing of every
 // preset at 266 mm on A4.
-const CTL_WIDEN=new Set(['hookWeight','coat','hardware','lipLen']);
+const CTL={
+  density:{fmt:v=>(+v).toFixed(2)}, hookWeight:{fmt:v=>v, widen:true}, coat:{fmt:v=>v, widen:true}, hardware:{fmt:v=>v, widen:true},
+  sectN:{fmt:v=>+v<=2.05?'타원':+v>=5?'각진 '+(+v).toFixed(1):'둥근 사각 '+(+v).toFixed(1)},
+  sectE:{fmt:v=>Math.abs(v)<0.025?'대칭':(+v>0?'배 넓음 ':'등 넓음 ')+Math.abs(v).toFixed(2)},
+  lipLen:{fmt:v=>v, widen:true}, lipAng:{fmt:v=>v+'°'}, eyeSize:{fmt:v=>v}, hookSize:{fmt:v=>v},
+  smooth:{fmt:v=>(v/100).toFixed(2)}};
+// Checkbox settings: design key → checkbox id
+const CHECKS={lip:'lipToggle', symSide:'symSide', symTop:'symTop', prop:'propToggle'};
+// Show design[id] on its slider and label
+function showCtl(id) {
+  const s=document.getElementById(id+'Slider'), v=design[id];
+  if(CTL[id].widen) fitRange(s,v);
+  s.value=v; document.getElementById(id+'Val').textContent=CTL[id].fmt(v);
+}
+// Set a design value from the program (presets, scaling, undo, density fit)
 function setCtl(id, v) {
-  const s=document.getElementById(id+'Slider');
-  if(CTL_WIDEN.has(id)) fitRange(s,v);
-  s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+  v=+v;
+  if(!CTL[id].widen){ const s=document.getElementById(id+'Slider'); v=Math.max(+s.min,Math.min(+s.max,v)); }
+  design[id]=v; showCtl(id);
+  if(id==='smooth') SM=v/100;
+}
+function setCheck(key, on) { design[key]=!!on; document.getElementById(CHECKS[key]).checked=design[key]; }
+// The user moved a design slider: one undo step per drag, saved before the change
+function onCtlInput(id, el) {
+  saveHGrouped(id);
+  design[id]=+el.value; document.getElementById(id+'Val').textContent=CTL[id].fmt(design[id]);
+  if(id==='smooth'){ SM=design.smooth/100; syncSlidersFromPoints(); }
+  if(id==='sectN'||id==='sectE') drawSection();
+  render();
+}
+// The user flipped a design checkbox. keepDirty: an editing mode (proportional scaling), not a lure change.
+function onCheck(key, el, keepDirty) {
+  saveH(keepDirty); design[key]=el.checked;
+  if(key==='symSide'||key==='symTop'){ applySym(); syncSlidersFromPoints(); }
+  render(key==='prop');
 }
 // A value the program sets past a slider's own range (proportional scaling of a big lure, an undo back to
 // one) widens the range instead of being cut to it: the physics reads these sliders, so a 28 g hook capped
@@ -628,17 +658,11 @@ function fitRange(s, v) {
   const keep=document.activeElement===s;
   s.min=Math.min(keep?+s.min:+s.dataset.min0,+v); s.max=Math.max(keep?+s.max:+s.dataset.max0,+v);
 }
-function ctlState() {
-  const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
-  for(const id in CTL_FMT) st.sl[id]=document.getElementById(id+'Slider').value;
-  CTL_CHECKS.forEach(id=>st.ck[id]=document.getElementById(id).checked);
-  return st;
-}
+function ctlState() { return {d:{...design}, preset:{...currentPreset}, dirty:presetDirty}; }
 // Returns true when the restored state belongs to a different preset
 function restoreCtl(st) {
-  for(const id in st.sl) setCtl(id,st.sl[id]);
-  for(const id in st.ck) document.getElementById(id).checked=st.ck[id];
-  SM=document.getElementById('smoothSlider').value/100;
+  for(const id in CTL) setCtl(id,st.d[id]);
+  for(const key in CHECKS) setCheck(key,st.d[key]);
   const changed=st.preset.cat!==currentPreset.cat||st.preset.key!==currentPreset.key;
   currentPreset={...st.preset}; presetDirty=st.dirty;
   if(changed){ presetViewCat=currentPreset.cat; updatePresetUI(); }
@@ -674,7 +698,7 @@ function presetProfile(arr, t, T) {
 function applyPreset(cat, key) {
   const p=PRESETS[cat].items[key];
   if(cat!==currentPreset.cat || key!==currentPreset.key) calibClear(); // measurements of the previous lure
-  setCtl('smooth',100); SM=1; // presets are drawn with the natural curve (also sets the length stretch below)
+  setCtl('smooth',100); // presets are drawn with the natural curve (also sets the length stretch below)
   // A preset may set its own stations; coarse ones are densified so the outline bends smoothly
   let T=p.T||PRESET_T, up=p.up, lo=p.lo, hw=p.hw;
   if(T.length<11){
@@ -715,11 +739,11 @@ function applyPreset(cat, key) {
   setCtl('hookWeight',p.hookW||1.5); // big-game hooks + rings weigh far more than bass trebles
   setCtl('coat',p.coat||0); setCtl('hardware',p.hardware||0);
   setCtl('sectN',p.sectN||2); setCtl('sectE',p.sectE||0); drawSection();
-  document.getElementById('lipToggle').checked=!!p.lip;
+  setCheck('lip',p.lip);
   if(p.lip){ setCtl('lipLen',p.lip.len); setCtl('lipAng',p.lip.ang); }
-  document.getElementById('symSide').checked=false; // most profiles differ above/below the centre line
-  document.getElementById('symTop').checked=true;
-  document.getElementById('propToggle').checked=!!p.prop;
+  setCheck('symSide',false); // most profiles differ above/below the centre line
+  setCheck('symTop',true);
+  setCheck('prop',p.prop);
 
   currentPreset={cat,key}; presetViewCat=cat; presetDirty=false; updatePresetUI();
   afterStateReplaced();
@@ -742,7 +766,10 @@ function updatePresetUI() {
 }
 
 function init() {
-  for(const id in CTL_FMT) ctlLast[id]=document.getElementById(id+'Slider').value;
+  // Start from the controls' default values in the HTML (the preset below then sets them)
+  for(const id in CTL) design[id]=+document.getElementById(id+'Slider').value;
+  for(const key in CHECKS) design[key]=document.getElementById(CHECKS[key]).checked;
+  SM=design.smooth/100;
   setupEvents();
   applyPreset(currentPreset.cat, currentPreset.key);
 }
@@ -761,7 +788,7 @@ function viewPts(view) { return view==='side'?sidePts:topPts; }
 // Extent of the drawn (smoothed) outline: the curve rounds past the end points (e.g. a flat tail face by
 // 1-2 mm), so sizes, scaling and printing use this rather than the control points
 function drawnRange(view) { const f=flattenSmooth(viewPts(view),SM,16); return {x:xRange(f), y:yRange(f)}; }
-function symOn(view) { return document.getElementById(view==='side'?'symSide':'symTop').checked; }
+function symOn(view) { return design[view==='side'?'symSide':'symTop']; }
 // Apply f to every X of a view. Parts live in side-view coords, so they move with the side body.
 function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).forEach(a=>a.forEach(p=>p.x=f(p.x))); }
 
@@ -859,9 +886,9 @@ function changePts(view, n) {
 
 function scaleLengthAll(v) {
   v=parseInt(v); document.getElementById('lenVal').textContent=v;
-  const prop=document.getElementById('propToggle').checked;
+  const prop=design.prop;
   if(!lenBase){
-    const r=drawnRange('side').x, val=id=>parseFloat(document.getElementById(id+'Slider').value);
+    const r=drawnRange('side').x, val=id=>design[id];
     lenBase={L:r.mx-r.mn, weights:weights.map(w=>({...w})), hookWeight:val('hookWeight'), coat:val('coat'), hardware:val('hardware'), eyeSize:val('eyeSize'), hookSize:val('hookSize'), lipLen:val('lipLen')};
   }
   lenEditing=true; saveHGrouped('len'); lenEditing=false; // this undo step keeps the scaling base
@@ -1013,9 +1040,6 @@ function applySymTo(pts, sym) {
   pts[n-1].x=pts[0].x; pts[n-1].y=pts[0].y;
 }
 function applySym() { applySymTo(sidePts,symOn('side')); applySymTo(topPts,symOn('top')); }
-// The checkbox has already flipped when onchange runs: record its previous state in the undo step
-function saveHCheck(el, keepDirty) { saveH(keepDirty); undoStack[undoStack.length-1].c.ck[el.id]=!el.checked; }
-function onSymToggle(el) { saveHCheck(el); applySym(); syncSlidersFromPoints(); render(); }
 // Indices 0..editableCount-1 can be dragged; the rest are mirrors (or the duplicated nose)
 function editableCount(n, sym) { return sym ? n-Math.floor(n/2) : n-1; }
 
@@ -1056,16 +1080,11 @@ function lipGeom(nx, ny, ll, la, lw) {
   const s=p=>r2(p.x)+' '+r2(p.y);
   return { hull, d:'M '+s(hull[0])+' Q '+s(hull[1])+', '+s(hull[2])+' L '+s(hull[3])+' Q '+s(hull[4])+', '+s(hull[5])+' Z' };
 }
-function lipParams() {
-  return { on:document.getElementById('lipToggle').checked,
-    len:parseInt(document.getElementById('lipLenSlider').value),
-    ang:parseInt(document.getElementById('lipAngSlider').value) };
-}
+function lipParams() { return { on:design.lip, len:design.lipLen, ang:design.lipAng }; }
 
 // Eyes, hook eyes and line eyes (side view). interactive=true adds hit-test attrs and selection highlight.
 function partsMarkup(cx, cy, zoom, interactive) {
-  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value)*zoom;
-  const hookR=parseFloat(document.getElementById('hookSizeSlider').value)*zoom;
+  const eyeR=design.eyeSize*zoom, hookR=design.hookSize*zoom;
   const isSel=(t,i)=>interactive&&selectedPart&&selectedPart.type===t&&selectedPart.idx===i;
   const hit=(t,i)=>interactive?' data-part="'+t+'" data-pi="'+i+'" style="cursor:grab"':'';
   let s='';
@@ -1297,12 +1316,7 @@ function setupEvents() {
   const sb=document.getElementById('sidebar');
   sb.addEventListener('input', e=>{
     if(e.target.type==='checkbox') return;
-    // Lure settings sliders: one undo step per drag, holding the value from before the drag
-    const id=e.target.id.replace(/Slider$/,'');
-    if(id in CTL_FMT){
-      if(saveHGrouped(id)) undoStack[undoStack.length-1].c.sl[id]=ctlLast[id];
-      ctlLast[id]=e.target.value;
-    }
+    // (design sliders record their own undo step in onCtlInput, before the value changes)
     markDirty(e);
   });
   sb.addEventListener('change', e=>{ if(e.target.type==='checkbox') markDirty(e); });
@@ -1523,8 +1537,7 @@ function onUp(){
 function buildLureSVG(M, sw, MX=M) {
   const GAP=20;
   const bbox=pts=>{ const x=xRange(pts), y=yRange(pts); return {x1:x.mn,y1:y.mn,w:x.mx-x.mn,h:y.mx-y.mn}; };
-  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
-  const hookR=parseFloat(document.getElementById('hookSizeSlider').value);
+  const eyeR=design.eyeSize, hookR=design.hookSize;
   const sideExtent=sidePts.slice();
   const addCircle=(p,r)=>sideExtent.push({x:p.x-r,y:p.y-r},{x:p.x+r,y:p.y+r});
   eyes.forEach(p=>addCircle(p,eyeR));
@@ -1569,7 +1582,7 @@ function designCode() {
 function designCodeMarkup(code, sideF) {
   if(!code) return '';
   const sx=xRange(sidePts), L=sx.mx-sx.mn, mid=(sx.mn+sx.mx)/2, MARGIN=0.6;
-  const eyeR=parseFloat(document.getElementById('eyeSizeSlider').value);
+  const eyeR=design.eyeSize;
   const hitsEye=(cx,cy,w,h)=>eyes.some(e=>{ const dx=Math.max(Math.abs(e.x-cx)-w/2,0), dy=Math.max(Math.abs(e.y-cy)-h/2,0); return dx*dx+dy*dy<(eyeR+MARGIN)**2; });
   // Box against a weight ellipse grown by the margin: scaled by its radii the ellipse is the unit circle and
   // the box stays a box, so they meet when the box's nearest point is within 1
@@ -1713,7 +1726,7 @@ function polyArea(pts) {
 const SECT_ELLIPSE={F:Math.PI, c0:0, perK:1, seg:t=>ellipseSeg(t), w:u=>Math.sqrt(Math.max(0,1-u*u))};
 let sectCache=null;
 function sectionProfile() {
-  const n=parseFloat(document.getElementById('sectNSlider').value), e=parseFloat(document.getElementById('sectESlider').value);
+  const n=design.sectN, e=design.sectE;
   if(n<=2.0001 && Math.abs(e)<1e-6) return SECT_ELLIPSE; // exact formulas for the default
   const key=n+'/'+e;
   if(sectCache && sectCache.key===key) return sectCache;
@@ -2215,12 +2228,10 @@ function calcPhysics() {
   // Get dimensions in mm
   const sx=drawnRange('side').x, [L,H,W]=lureSize(); // drawn length, height, width (mm)
   if(L<1||H<1||W<1) return;
-  const density=parseFloat(document.getElementById('densitySlider').value);
+  const density=design.density;
   const addWeight=weights.reduce((s,w)=>s+w.g,0);
   const weightPos=addWeight>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/addWeight:50; // mass-weighted position
-  const hookW=parseFloat(document.getElementById('hookWeightSlider').value);
-  const coat=parseFloat(document.getElementById('coatSlider').value);
-  const hardware=parseFloat(document.getElementById('hardwareSlider').value);
+  const hookW=design.hookWeight, coat=design.coat, hardware=design.hardware;
   const speed=parseInt(document.getElementById('speedSlider').value);
   const lip=lipParams();
 
@@ -2990,7 +3001,7 @@ function drawLip(ctx,nx,ny,len,ang,sc){
   ctx.fill(path);ctx.stroke(path);
 }
 // Eye radius in the preview: the eye size setting (mm, as in the editor), at least a visible dot
-function animEyeR(sc){ return Math.max(1.2,parseFloat(document.getElementById('eyeSizeSlider').value)*sc); }
+function animEyeR(sc){ return Math.max(1.2,design.eyeSize*sc); }
 
 function drawLureSide(ctx,ph,sc){
   traceBody(ctx,sidePts,sc);

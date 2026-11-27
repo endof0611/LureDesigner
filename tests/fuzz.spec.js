@@ -24,9 +24,14 @@ function invariants() {
   if (!lastPhys || ![lastPhys.raw.M, lastPhys.gm, lastPhys.cg.x, lastPhys.cg.z].every(isFinite)) bad.push('physics not finite');
   weights.forEach((w, i) => { if (!(w.g <= w.gp + 1e-9)) bad.push('weight ' + i + ' above its asked mass'); if (![w.g, w.d, w.pos].every(isFinite)) bad.push('weight ' + i + ' not finite'); });
   if (!document.getElementById('statusInfo').textContent.startsWith(presetName())) bad.push('status line');
-  // sidebar labels show their slider, and the undo baseline of each slider matches it
+  // every design value is shown on its slider, label and checkbox
   const lab = (id, exp) => { const t = document.getElementById(id).textContent; if (t !== String(exp)) bad.push('label ' + id + ' "' + t + '" vs "' + exp + '"'); };
-  for (const id in CTL_FMT) { const v = document.getElementById(id + 'Slider').value; lab(id + 'Val', CTL_FMT[id](v)); if (String(ctlLast[id]) !== v) bad.push('undo baseline of ' + id); }
+  for (const id in CTL) {
+    if (!isFinite(design[id])) bad.push(id + ' not finite');
+    lab(id + 'Val', CTL[id].fmt(design[id]));
+    if (Math.abs(+document.getElementById(id + 'Slider').value - design[id]) > 1e-9) bad.push(id + ' slider ' + document.getElementById(id + 'Slider').value + ' vs ' + design[id]);
+  }
+  for (const k in CHECKS) if (document.getElementById(CHECKS[k]).checked !== design[k]) bad.push(k + ' checkbox');
   const [L, H, W] = lureSize();
   for (const [id, v] of [['len', L], ['sideH', H], ['topW', W]]) {
     const sl = document.getElementById(id + 'Slider'), want = Math.max(+sl.min, Math.min(+sl.max, Math.round(v)));
@@ -37,7 +42,7 @@ function invariants() {
   return bad;
 }
 
-const snap = () => JSON.stringify({ s: sidePts, t: topPts, e: eyes, h: hooks, l: lineEyes, w: weights.map(w => ({ pos: w.pos, gp: w.gp, dp: w.dp })), c: ctlState().sl, k: ctlState().ck, SM });
+const snap = () => JSON.stringify({ s: sidePts, t: topPts, e: eyes, h: hooks, l: lineEyes, w: weights.map(w => ({ pos: w.pos, gp: w.gp, dp: w.dp })), d: ctlState().d, SM });
 
 const SLIDERS = [['lenSlider', 40, 266, 1], ['sideHSlider', 8, 80, 1], ['topWSlider', 6, 60, 1], ['sectNSlider', 2, 6, 0.1], ['sectESlider', -0.4, 0.4, 0.05],
   ['smoothSlider', 0, 100, 1], ['densitySlider', 0.1, 2, 0.01], ['hookWeightSlider', 0, 15, 0.5], ['coatSlider', 0, 20, 0.5], ['hardwareSlider', 0, 30, 0.5],
