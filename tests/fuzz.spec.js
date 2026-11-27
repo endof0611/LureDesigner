@@ -2,7 +2,8 @@
 // hold, and undoing everything must give back the starting state exactly.
 const { test, expect, frames, screenOf } = require('./helpers');
 
-const SEEDS = [1, 2, 3];
+// More seeds for a deeper run: FUZZ_SEEDS=1,2,3,4,5,6,7,8 npm test
+const SEEDS = (process.env.FUZZ_SEEDS || '1,2,3').split(',').map(Number);
 const STEPS = 30;
 
 // Invariants checked in the page after each step
@@ -32,6 +33,7 @@ function invariants() {
     if (Math.abs(+document.getElementById(id + 'Slider').value - design[id]) > 1e-9) bad.push(id + ' slider ' + document.getElementById(id + 'Slider').value + ' vs ' + design[id]);
   }
   for (const k in CHECKS) if (document.getElementById(CHECKS[k]).checked !== design[k]) bad.push(k + ' checkbox');
+  if (+document.getElementById('speedSlider').value !== viewSet.speed || document.getElementById('speedVal').textContent !== SPEED_NAMES[viewSet.speed]) bad.push('speed control');
   const [L, H, W] = lureSize();
   for (const [id, v] of [['len', L], ['sideH', H], ['topW', W]]) {
     const sl = document.getElementById(id + 'Slider'), want = Math.max(+sl.min, Math.min(+sl.max, Math.round(v)));

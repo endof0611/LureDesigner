@@ -35,3 +35,9 @@ GitHub에서는 모든 PR과 `main` 푸시마다 자동으로 실행됩니다(`.
 `presets-print.spec.js`의 `EXPECTED`는 프리셋의 계산 결과(README 프리셋 표와 같은 값)입니다. 프리셋이나 물리 모델을 의도적으로 바꿨다면 이 값과 README 표를 함께 고칩니다.
 
 무작위 편집 테스트가 실패하면 메시지에 시드와 마지막 몇 단계가 나옵니다. 같은 시드로 다시 실행하면 같은 순서가 재현됩니다.
+
+더 많은 시드로 깊게 돌리려면 시드 목록을 환경 변수로 줍니다.
+
+```bash
+FUZZ_SEEDS=1,2,3,4,5,6,7,8,9,10 npx playwright test tests/fuzz.spec.js
+```

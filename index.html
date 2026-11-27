@@ -315,15 +315,15 @@
       <div class="panel-body">
       <div class="control-row"><span class="control-label">측면 상하 대칭</span><label class="toggle"><input type="checkbox" id="symSide" onchange="onCheck('symSide',this)"><span class="toggle-slider"></span></label></div>
       <div class="control-row"><span class="control-label">상면 좌우 대칭</span><label class="toggle"><input type="checkbox" id="symTop" checked onchange="onCheck('symTop',this)"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="render()"><span class="toggle-slider"></span></label></div>
-      <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="render(true)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">컨트롤 포인트</span><label class="toggle"><input type="checkbox" id="showPtsToggle" checked onchange="viewSet.showPts=this.checked;render(true)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">무게중심(G) / 부력중심(B)</span><label class="toggle"><input type="checkbox" id="cgToggle" onchange="viewSet.showCG=this.checked;render(true)"><span class="toggle-slider"></span></label></div>
       </div>
     </div>
     <div class="panel collapsed" id="physicsResult">
       <div class="panel-title" onclick="this.parentElement.classList.toggle('collapsed')">📊 액션 예측</div>
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">리트리브 속도</span><span class="slider-value" id="speedVal">보통</span></div>
-        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="document.getElementById('speedVal').textContent=SPEED_NAMES[this.value];render()"></div>
+        <input type="range" min="1" max="5" value="3" id="speedSlider" oninput="setSpeed(this.value);render()"></div>
       <div id="physicsOutput" style="font-size:11px;line-height:1.8">
         <div class="control-row"><span>부력 상태</span><span id="phBuoyancy" style="color:var(--accent);font-weight:600">-</span></div>
         <div class="control-row"><span>정지 자세</span><span id="phPosture" style="color:var(--accent)">-</span></div>
@@ -648,6 +648,13 @@ function onCheck(key, el, keepDirty) {
   if(key==='symSide'||key==='symTop'){ applySym(); syncSlidersFromPoints(); }
   render(key==='prop');
 }
+// View settings: the retrieve speed the predictions use and what the editor draws. Not part of the lure, so
+// not in the undo history; the controls show them the same way as the design values.
+const viewSet={};
+function setSpeed(v) {
+  viewSet.speed=+v; document.getElementById('speedSlider').value=viewSet.speed;
+  document.getElementById('speedVal').textContent=SPEED_NAMES[viewSet.speed];
+}
 // A value the program sets past a slider's own range (proportional scaling of a big lure, an undo back to
 // one) widens the range instead of being cut to it: the physics reads these sliders, so a 28 g hook capped
 // at 15 g made the lure 26 g too light. Once the value is back within the original range, so is the slider.
@@ -770,6 +777,9 @@ function init() {
   for(const id in CTL) design[id]=+document.getElementById(id+'Slider').value;
   for(const key in CHECKS) design[key]=document.getElementById(CHECKS[key]).checked;
   SM=design.smooth/100;
+  viewSet.speed=+document.getElementById('speedSlider').value;
+  viewSet.showPts=document.getElementById('showPtsToggle').checked;
+  viewSet.showCG=document.getElementById('cgToggle').checked;
   setupEvents();
   applyPreset(currentPreset.cat, currentPreset.key);
 }
@@ -1207,7 +1217,7 @@ function renderView(which) {
     // Parts (draggable)
     html+=partsMarkup(cx,cy,zoom,true);
     // Centre of gravity (G) / buoyancy (B) and the vertical through G at the rest posture
-    if(document.getElementById('cgToggle').checked && lastPhys && dragView===null){
+    if(viewSet.showCG && lastPhys && dragView===null){
       const G={x:cx+lastPhys.cg.x*zoom, y:cy+lastPhys.cg.z*zoom}, B={x:cx+lastPhys.cb.x*zoom, y:cy+lastPhys.cb.z*zoom};
       const th=(lastPhys.pitch||0)*Math.PI/180, len=lastPhys.H*0.8*zoom;
       const vx=Math.sin(th)*len, vy=Math.cos(th)*len; // world "down" in body coordinates
@@ -1222,7 +1232,7 @@ function renderView(which) {
   }
 
   // Control points
-  if(document.getElementById('showPtsToggle').checked){
+  if(viewSet.showPts){
     const n=pts.length, ec=editableCount(n,sym);
     for(let i=0;i<n;i++){
       const ed=i<ec;
@@ -2232,7 +2242,7 @@ function calcPhysics() {
   const addWeight=weights.reduce((s,w)=>s+w.g,0);
   const weightPos=addWeight>0?weights.reduce((s,w)=>s+w.g*w.pos,0)/addWeight:50; // mass-weighted position
   const hookW=design.hookWeight, coat=design.coat, hardware=design.hardware;
-  const speed=parseInt(document.getElementById('speedSlider').value);
+  const speed=viewSet.speed;
   const lip=lipParams();
 
   // Body: integrate elliptical cross-sections (side height × top width) along the rendered outline
@@ -2410,7 +2420,7 @@ function calcPhysics() {
   set('phRec',TECH_NAMES[rec.tech]+' · '+SPEED_NAMES[rec.speed]+' · 세기 ×'+rec.power.toFixed(1)+(rec.pause!==1?' · 포즈 ×'+rec.pause.toFixed(1):''));
   document.getElementById('phRecWhy').innerHTML=rec.why.map(w=>'· '+w).join('<br>');
   // Slider-driven recalculation outside a render: refresh the CG/CB markers
-  if(!inRender && document.getElementById('cgToggle').checked) render(true);
+  if(!inRender && viewSet.showCG) render(true);
 }
 
 // === RECOMMENDED TECHNIQUE ===
@@ -2467,8 +2477,8 @@ function recommendAction() {
 // Put the recommendation into the speed setting and the preview options
 function applyRecommended() {
   calcPhysics();
-  const r=recommendAction(), sp=document.getElementById('speedSlider');
-  if(+sp.value!==r.speed){ sp.value=r.speed; document.getElementById('speedVal').textContent=SPEED_NAMES[r.speed]; calcPhysics(); render(); }
+  const r=recommendAction();
+  if(viewSet.speed!==r.speed){ setSpeed(r.speed); calcPhysics(); render(); }
   animTech=r.tech;
   for(const [k,id] of [['power','animPowerSlider'],['pause','animPauseSlider']]){
     animOpt[k]=r[k]; document.getElementById(id).value=r[k]; document.getElementById('animOpt_'+k).textContent='×'+r[k].toFixed(1);

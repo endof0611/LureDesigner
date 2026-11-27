@@ -127,6 +127,26 @@ test('pinch zoom with a finger starting on a point moves nothing and records not
   expect(r).toEqual({ zoomed: true, moved: false, undo: 0, dirty: false });
 });
 
+test('view settings: control points, G / B markers and retrieve speed; not part of undo', async ({ page }) => {
+  const count = () => page.evaluate(() => ({ pts: document.querySelectorAll('#sideSVG .control-point').length === sidePts.length,
+    gb: [...document.querySelectorAll('#sideSVG text')].filter(t => t.textContent === 'G' || t.textContent === 'B').length }));
+  await page.evaluate(() => { document.querySelectorAll('.panel.collapsed').forEach(x => x.classList.remove('collapsed')); applyPreset('etc', 'crank'); undoStack = []; });
+  await frames(page);
+  expect(await count()).toEqual({ pts: true, gb: 0 });
+  await page.click('#cgToggle + .toggle-slider'); await page.click('#showPtsToggle + .toggle-slider'); await frames(page);
+  expect(await count()).toEqual({ pts: false, gb: 2 });
+  // a lipped lure runs deeper at a faster retrieve
+  const depth = () => page.evaluate(() => parseFloat(document.getElementById('phDepth').textContent));
+  const slow = await (async () => { await page.evaluate(() => { const s = document.getElementById('speedSlider'); s.value = 1; s.dispatchEvent(new Event('input', { bubbles: true })); }); await frames(page); return depth(); })();
+  const fast = await (async () => { await page.evaluate(() => { const s = document.getElementById('speedSlider'); s.value = 5; s.dispatchEvent(new Event('input', { bubbles: true })); }); await frames(page); return depth(); })();
+  expect(fast).toBeGreaterThan(slow);
+  expect(await page.evaluate(() => [viewSet.speed, document.getElementById('speedVal').textContent, undoStack.length, presetDirty])).toEqual([5, '매우빠름', 0, false]);
+  // an undo of a lure edit leaves the view settings alone
+  await page.evaluate(() => { addPart('eye'); undoAction(); }); await frames(page);
+  expect(await count()).toEqual({ pts: false, gb: 2 });
+  expect(await page.evaluate(() => viewSet.speed)).toBe(5);
+});
+
 test('the add-weight button is off at the 8-weight limit', async ({ page }) => {
   const r = await page.evaluate(() => {
     applyPreset('biggame', 'aji'); for (let i = 0; i < 7; i++) addWeight();
