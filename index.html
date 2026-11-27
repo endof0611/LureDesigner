@@ -69,7 +69,10 @@
 
   .control-point{cursor:grab}
 
-  .status-bar{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:var(--surface);border-top:1px solid var(--border);font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim)}
+  .status-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 12px;background:var(--surface);border-top:1px solid var(--border);font-family:'SF Mono',SFMono-Regular,'Courier New',monospace;font-size:10px;color:var(--text-dim)}
+  /* One line: on a narrow screen the preset / point summary is cut with "…" instead of wrapping mid-word */
+  #statusCoords{white-space:nowrap;flex-shrink:0}
+  #statusInfo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;text-align:right}
 
   .export-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center}
   .export-dialog{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;width:340px;max-width:90vw}
@@ -111,6 +114,10 @@
     .panel{padding:12px}
     .control-label{font-size:11px}
     .btn{padding:5px 10px;font-size:11px}
+  }
+  /* Very narrow phones (320 px): the logo text gives way so all header buttons fit */
+  @media(max-width:359px){
+    .logo span{display:none}
   }
 
 
@@ -604,7 +611,17 @@ const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
 function setCtl(id, v) {
   const s=document.getElementById(id+'Slider');
-  s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+  fitRange(s,v); s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+}
+// A value the program sets past a slider's own range (proportional scaling of a big lure, an undo back to
+// one) widens the range instead of being cut to it: the physics reads these sliders, so a 28 g hook capped
+// at 15 g made the lure 26 g too light. Once the value is back within the original range, so is the slider.
+function fitRange(s, v) {
+  if(s.dataset.min0===undefined){ s.dataset.min0=s.min; s.dataset.max0=s.max; }
+  // While the user is on this slider its range only widens: narrowing it mid-drag would move the thumb
+  // out from under the pointer
+  const keep=document.activeElement===s;
+  s.min=Math.min(keep?+s.min:+s.dataset.min0,+v); s.max=Math.max(keep?+s.max:+s.dataset.max0,+v);
 }
 function ctlState() {
   const st={sl:{}, ck:{}, preset:{...currentPreset}, dirty:presetDirty};
@@ -1928,10 +1945,11 @@ function syncWeightUI() {
   const full=weights.length>=MAX_WEIGHTS, add=document.getElementById('weightAddBtn');
   add.disabled=full; add.title=full?'웨이트는 최대 '+MAX_WEIGHTS+'개':'';
   if(!w) return;
-  document.getElementById('weightSlider').value=w.g; set('weightVal',w.g);
+  // (a weight scaled past the slider range keeps its mass; the slider widens to show it, as setCtl does)
+  const ws=document.getElementById('weightSlider'); fitRange(ws,w.g); ws.value=w.g; set('weightVal',w.g);
   document.getElementById('weightPosSlider').value=w.pos; set('weightPosVal',w.pos+'%');
   const rg=diaRange(w);
-  document.getElementById('weightDiaSlider').value=w.d;
+  const wd=document.getElementById('weightDiaSlider'); fitRange(wd,w.d); wd.value=w.d;
   set('weightDiaVal',w.d+' (길이 '+(weightShape(w).rx*2).toFixed(1)+')'+(rg?' · 가능 '+rg.mn+'~'+rg.mx:''));
 }
 function selectWeight(i) { selWeight=i; syncWeightUI(); render(true); }
