@@ -609,9 +609,14 @@ const CTL_FMT={density:v=>(+v).toFixed(2), hookWeight:v=>v, coat:v=>v, hardware:
   smooth:v=>(v/100).toFixed(2)}; // curve smoothness: slider 0-100, SM = value/100
 const CTL_CHECKS=['lipToggle','symSide','symTop','propToggle'];
 const ctlLast={}; // last value of each control slider, so a user drag can record the value it started from
+// Sliders whose values the physics reads: a value set past their range widens it (fitRange). The eye and
+// hook-eye ring sizes only draw the parts and stay within their ranges, which also keeps the drawing of every
+// preset at 266 mm on A4.
+const CTL_WIDEN=new Set(['hookWeight','coat','hardware','lipLen']);
 function setCtl(id, v) {
   const s=document.getElementById(id+'Slider');
-  fitRange(s,v); s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
+  if(CTL_WIDEN.has(id)) fitRange(s,v);
+  s.value=v; ctlLast[id]=s.value; document.getElementById(id+'Val').textContent=CTL_FMT[id](s.value);
 }
 // A value the program sets past a slider's own range (proportional scaling of a big lure, an undo back to
 // one) widens the range instead of being cut to it: the physics reads these sliders, so a 28 g hook capped
@@ -950,7 +955,9 @@ function syncToTop() { syncLengthTo('side','top'); }  // side view to the top vi
 function syncSlidersFromPoints() {
   forceSyncLength();
   const [L,H,W]=lureSize();
-  const set=(id,v)=>{v=Math.round(v);document.getElementById(id+'Slider').value=v;document.getElementById(id+'Val').textContent=v;};
+  // An outline dragged past a slider's range (e.g. longer than 266 mm) widens that range, so the next nudge
+  // of the slider moves on from the real size instead of jumping to the range's end (295 → 265 mm)
+  const set=(id,v)=>{v=Math.round(v);const s=document.getElementById(id+'Slider');fitRange(s,v);s.value=v;document.getElementById(id+'Val').textContent=v;};
   set('len',L); set('sideH',H); set('topW',W);
   document.getElementById('sizeInfo').textContent=[L,H,W].map(Math.round).join(' × ')+' mm';
 }
@@ -1605,7 +1612,9 @@ function exportSVG() {
 }
 
 // Actual-size print: the SVG is sized in mm (1 unit = 1 mm), with a 50 mm scale bar to check the printer scale
-function printLure() {
+// Builds the drawing into #printArea and sets the page size. Returns the note for a page larger than A4, or
+// null. Used by the print button and by the browser's own print (Ctrl+P, its menu).
+function buildPrint() {
   // 8 mm above/below the drawing (cm numbers, scale bar, label), 2 mm left/right so long lures fit the paper
   const M=8, MX=2, BAR=50, {w,h,inner,code,noseX,sideY,topY,split}=buildLureSVG(M,0.3,MX);
   const H=r2(h+16), by=r2(h+4); // scale bar and label below the drawing (and its grid)
@@ -1638,9 +1647,12 @@ function printLure() {
   const fits=(pw,ph)=>W<=pw-10&&H<=ph-10;
   const page=fits(210,297)?'A4 portrait':fits(297,210)?'A4 landscape':fits(297,420)?'A3 portrait':'A3 landscape';
   document.getElementById('printPage').textContent='@page{size:'+page+';margin:5mm}';
-  if(!fits(297,210) && !fits(210,297)) alert('실제 크기가 A4보다 커서 '+page.replace(' portrait',' 세로').replace(' landscape',' 가로')+' 용지로 설정됩니다.'+(fits(420,297)||fits(297,420)?'':' A3에도 다 들어가지 않아 일부가 잘릴 수 있습니다.'));
-  window.print();
+  return !fits(297,210) && !fits(210,297) ? '실제 크기가 A4보다 커서 '+page.replace(' portrait',' 세로').replace(' landscape',' 가로')+' 용지로 설정됩니다.'+(fits(420,297)||fits(297,420)?'':' A3에도 다 들어가지 않아 일부가 잘릴 수 있습니다.') : null;
 }
+function printLure() { const note=buildPrint(); if(note) alert(note); window.print(); }
+// The print CSS shows only #printArea, so the browser's own print (Ctrl+P, its menu, a phone's share → print)
+// came out blank unless the print button had filled it: fill it here when it is empty
+window.addEventListener('beforeprint', ()=>{ const a=document.getElementById('printArea'); if(a && !a.innerHTML) buildPrint(); });
 window.addEventListener('afterprint', ()=>{ const a=document.getElementById('printArea'); if(a) a.innerHTML=''; });
 
 function copyExport(btn) {
