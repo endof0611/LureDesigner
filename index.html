@@ -274,7 +274,7 @@
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">내부 웨이트</span><span class="slider-value" id="weightSum">-</span></div>
         <div class="seg" id="weightTabs" style="flex-wrap:wrap"></div>
-        <div style="display:flex;gap:4px"><button class="btn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div>
+        <div style="display:flex;gap:4px"><button class="btn" id="weightAddBtn" style="flex:1;justify-content:center" onclick="addWeight()">＋ 추가</button><button class="btn" id="weightDelBtn" style="flex:1;justify-content:center" onclick="removeWeight()">－ 삭제</button></div>
         <div id="weightNote" style="font-size:10px;color:#f59e0b;line-height:1.4;margin-top:6px;display:none"></div>
         <div id="weightOut" style="font-size:10px;color:#fb923c;line-height:1.4;margin-top:6px;display:none"></div></div>
       <div id="weightEdit">
@@ -440,13 +440,13 @@
   </div>
 </div>
 
-<div class="export-overlay" id="exportOverlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+<div class="export-overlay" id="exportOverlay" style="display:none" onclick="if(event.target===this)closeExport()">
   <div class="export-dialog">
     <h3>SVG 내보내기</h3>
     <textarea id="exportContent" readonly></textarea>
     <button class="btn btn-accent" onclick="copyExport(this)">📋 복사</button>
     <button class="btn" onclick="dlSVG()" style="margin-top:8px">⬇ 파일 저장</button>
-    <button class="btn" onclick="document.getElementById('exportOverlay').style.display='none'" style="margin-top:8px">닫기</button>
+    <button class="btn" onclick="closeExport()" style="margin-top:8px">닫기</button>
   </div>
 </div>
 
@@ -1280,6 +1280,10 @@ function setupEvents() {
   });
   window.addEventListener('orientationchange', ()=>setTimeout(()=>render(true),200));
   window.addEventListener('keydown', e=>{
+    // A dialog (action preview, SVG export) covers the lure: Esc closes it, and the editing keys must not
+    // reach the lure behind it (Delete / Backspace would remove a selected part the user can't see)
+    const dlg=['animOverlay','exportOverlay'].find(id=>document.getElementById(id).style.display!=='none');
+    if(dlg){ if(e.key==='Escape'){ if(dlg==='animOverlay') closeAnimation(); else closeExport(); } return; }
     if(e.target.matches && e.target.matches('input,textarea,select')) return; // keys belong to the focused control
     if(e.key==='Delete'||e.key==='Backspace'){
       if(selectedPart){
@@ -1833,6 +1837,7 @@ function weightInside(w, sideF, topF) {
   return true;
 }
 const WEIGHT_DIAS=Array.from({length:59},(_,i)=>1+i*0.5); // the diameter slider's steps (1-30 mm)
+const MAX_WEIGHTS=8;
 function bodyOutlines() { return [flattenSmooth(sidePts,SM,12), flattenSmooth(topPts,SM,12)]; }
 // Diameter that fits mass g at w.pos (nose to tail), nearest to the one asked for (null if none)
 function fitDia(w, g) {
@@ -1909,6 +1914,8 @@ function syncWeightUI() {
   oe.textContent=out.length?'● 웨이트 '+out.join(', ')+': 외곽선 밖으로 나옴 (주황 부분, 무게는 루어 내부로 계산)':''; oe.style.display=out.length?'':'none';
   document.getElementById('weightEdit').style.display=w?'':'none';
   document.getElementById('weightDelBtn').disabled=!w;
+  const full=weights.length>=MAX_WEIGHTS, add=document.getElementById('weightAddBtn');
+  add.disabled=full; add.title=full?'웨이트는 최대 '+MAX_WEIGHTS+'개':'';
   if(!w) return;
   document.getElementById('weightSlider').value=w.g; set('weightVal',w.g);
   document.getElementById('weightPosSlider').value=w.pos; set('weightPosVal',w.pos+'%');
@@ -1930,7 +1937,7 @@ function setWeightProp(k, v) {
   syncWeightUI(); render(); // physics once per frame while a slider is dragged
 }
 function addWeight() {
-  if(weights.length>=8) return;
+  if(weights.length>=MAX_WEIGHTS) return;
   saveH();
   const w=weights[selWeight];
   const nw=w?{pos:Math.min(95,w.pos+15), g:w.g, gp:w.gp??w.g, d:w.d, dp:w.dp??w.d}:{pos:50, g:5, gp:5, d:autoDia(5), dp:autoDia(5)};
@@ -2053,7 +2060,7 @@ function actionText(a, tech) {
     liplessMinnow:{retrieve:'표층 약 '+m(a.runDepth)+'에서 롤링 위주의 타이트 액션', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop},
     sinkingPencil:{retrieve:'S자 슬라이드 + 롤링, 느리게 감을수록 깊게 (약 '+m(a.runDepth)+')', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop,
       liftfall:'들어 올리면 상승, 멈추면 롤링하며 '+stop},
-    vibe:{retrieve:'잘게 떠는 고속 진동 (약 '+a.wobHz.toFixed(0)+' Hz), 수심 약 '+m(a.runDepth), liftfall:'들어 올리며 진동하다 멈추면 '+stop+' (바닥 공략)'},
+    vibe:{retrieve:'잘게 떠는 고속 진동 (약 '+a.wobHz.toFixed(0)+' Hz), 수심 약 '+m(a.runDepth), liftfall:'들어 올리며 진동하다 멈추면 '+stop+(a.freeRate>0?' (바닥 공략)':'')},
     crank:{retrieve:'감으면 립이 물을 받아 워블하며 약 '+m(a.runDepth)+'까지 잠행', stopgo:'감으면 잠행, 멈추면 '+stop},
     minnow:{retrieve:'감으면 워블하며 약 '+m(a.runDepth)+'까지 잠행', twitch:'짧게 치면 좌우로 다팅, 멈추면 '+stop, stopgo:'감으면 잠행, 멈추면 '+stop},
     jerkbait:{jerk:'저크하면 좌우로 크게 다팅하며 약 '+m(a.diveDepth)+'까지, 포즈에서 '+stop, twitch:'짧게 치면 작은 다팅, 멈추면 '+stop,
@@ -2447,7 +2454,12 @@ function toggleAnimation(){
 function closeAnimation(){
   animPause();
   document.getElementById('animOverlay').style.display='none';
+  releaseDialogFocus('animOverlay');
 }
+function closeExport(){ document.getElementById('exportOverlay').style.display='none'; releaseDialogFocus('exportOverlay'); }
+// A control of a closed dialog (e.g. the SVG text box) keeps the focus while hidden: release it, or the
+// editing keys (Delete on a selected part) would still go to it
+function releaseDialogFocus(id){ const ae=document.activeElement; if(ae && ae!==document.body && document.getElementById(id).contains(ae)) ae.blur(); }
 function setAnimView(v,btn){
   animView=v;
   document.querySelectorAll('.anim-view-btn').forEach(b=>b.classList.toggle('active',b===btn));
@@ -2475,29 +2487,55 @@ function toggleAnimGraph(btn){
 }
 // Reference run: the trajectory and numbers of the design as it is now, kept while the design is edited.
 // It is also kept in this browser (localStorage) so it survives a reload; storage may be unavailable.
+// The design's preview parameters (a) and options (opt) are kept with it, so the reference also runs as a
+// "ghost" next to the preview for as long as it plays (the stored 24 s trajectory alone ran out after ~30 s).
 const REF_KEY='lureDesigner.animRef';
+let animGhost=null; // the reference design stepping alongside the live preview
 function animSaveRef(){
   const a=lastPhys.act;
-  animRef=Object.assign(animSimulate(a,animTech,animOpt,REF_SECS),{tech:animTech, type:a.type, saved:Date.now()});
+  animRef=Object.assign(animSimulate(a,animTech,animOpt,REF_SECS),{tech:animTech, type:a.type, saved:Date.now(), a:{...a}, opt:{...animOpt}});
   animStoreRef();
+  animGhostSync();
   updateAnimSummary();
   if(!animRunning) drawAnimation();
 }
-function animClearRef(){ animRef=null; animStoreRef(); updateAnimSummary(); if(!animRunning) drawAnimation(); }
+function animClearRef(){ animRef=null; animStoreRef(); animGhostSync(); updateAnimSummary(); if(!animRunning) drawAnimation(); }
 function animStoreRef(){
   try{
-    if(animRef) localStorage.setItem(REF_KEY,JSON.stringify(animRef,(k,v)=>typeof v==='number'?+v.toFixed(4):v));
+    // The drawn trajectory is rounded to save space; the parameters stay exact so the ghost runs as saved
+    const ref=animRef, round=function(k,v){ return typeof v==='number' && this!==ref.a && this!==ref.opt ? +v.toFixed(4) : v; };
+    if(ref) localStorage.setItem(REF_KEY,JSON.stringify(ref,round));
     else localStorage.removeItem(REF_KEY);
   }catch(e){}
 }
 function animLoadRef(){
   try{
     const r=JSON.parse(localStorage.getItem(REF_KEY));
-    if(r && Array.isArray(r.pts) && Array.isArray(r.ser) && LURE_TYPES[r.type] && TECH_NAMES[r.tech] && isFinite(r.maxD)) animRef=r;
+    if(r && Array.isArray(r.pts) && Array.isArray(r.ser) && LURE_TYPES[r.type] && TECH_NAMES[r.tech] && isFinite(r.maxD)){
+      if(!(r.a && typeof r.a==='object' && r.a.type===r.type && r.opt && isFinite(r.opt.power) && isFinite(r.opt.pause))){ delete r.a; delete r.opt; } // older save: trajectory only
+      animRef=r;
+    }
   }catch(e){}
 }
 animLoadRef();
 function animRefOk(){ return animRef && animRef.tech===animTech && animRef.type===lastPhys.act.type; }
+// (Re)start the ghost at the preview's current time. Without saved parameters (an older save) the stored
+// 24 s trajectory is drawn instead.
+function animGhostSync(){
+  animGhost=null;
+  if(!sim || !animRefOk() || !animRef.a) return;
+  animGhost=Object.assign(newSim(animRef.a,animRef.tech,false,animRef.opt),{pts:[], ptT:0});
+  for(let t=0; t<sim.t-1e-9; t+=1/120) animGhostStep(Math.min(1/120,sim.t-t));
+}
+// One step of the ghost, in step with the live preview: its trajectory (every 0.05 s, as the stored one)
+// and the last 7 s of its time series for the graph, dropping what is far behind the view
+function animGhostStep(dt){
+  const g=animGhost; if(!g) return;
+  animStep(g,animRef.a,animRef.tech,dt,animRef.opt);
+  g.ptT+=dt; if(g.ptT>=0.05-1e-9){ g.ptT=0; g.pts.push({x:g.x, d:g.d, lat:g.lat}); }
+  while(g.pts.length>2 && g.pts[1].x<sim.x-4) g.pts.shift();
+  while(g.ser.length && g.ser[0].t<g.t-7) g.ser.shift();
+}
 
 // Technique buttons for the detected lure type, and the description of the chosen one
 function updateAnimTechs(){
@@ -2546,10 +2584,10 @@ function animStop(){
 // Advance one frame (1/30 s) while paused
 function animFrame(){
   animPause();
-  for(let i=0;i<4;i++) animStep(sim,lastPhys.act,animTech,1/120,animOpt);
+  for(let i=0;i<4;i++){ animStep(sim,lastPhys.act,animTech,1/120,animOpt); animGhostStep(1/120); }
   drawAnimation(); animHud(true); // numbers follow every step, however fast the button is pressed
 }
-function animReset(){ sim=newSim(lastPhys.act,animTech,true,animOpt); animHud(true); }
+function animReset(){ sim=newSim(lastPhys.act,animTech,true,animOpt); animGhostSync(); animHud(true); }
 
 function newSim(a,tech,live,opt){
   const dpw=Math.min(1.5,Math.pow(opt.power,0.7));
@@ -2569,7 +2607,7 @@ function animSimulate(a,tech,opt,secs){
 function animLoop(ts){
   if(!animRunning)return;
   // Advance by real elapsed time (in small steps) so speed doesn't depend on the display refresh rate
-  if(animLastTs!==null){ let dt=Math.min(0.1,(ts-animLastTs)/1000)*animSpeed; while(dt>0){ const h=Math.min(dt,1/120); animStep(sim,lastPhys.act,animTech,h,animOpt); dt-=h; } }
+  if(animLastTs!==null){ let dt=Math.min(0.1,(ts-animLastTs)/1000)*animSpeed; while(dt>0){ const h=Math.min(dt,1/120); animStep(sim,lastPhys.act,animTech,h,animOpt); animGhostStep(h); dt-=h; } }
   animLastTs=ts;
   drawAnimation();
   animRAF=requestAnimationFrame(animLoop);
@@ -2635,7 +2673,13 @@ function animStep(s,a,tech,dt,opt){
   }
   else if(tech==='liftfall'){
     if(s.phase==='go'){ vT=a.rodV*1.3*pw; dT=Math.max(0,a.bottom-1.2); dRate=0.8; swim(); if(s.phaseT>=1.2){ s.phase='fall'; s.phaseT=0; } }
-    else { vT=0.12; slack=true; yawO=slow(1.5,6); pitchT=8; if(s.d>=a.bottom-0.01){ s.phase='go'; s.phaseT=0; } }
+    else {
+      vT=0.12; slack=true; yawO=slow(1.5,6); pitchT=a.freeRate>0?8:a.restPitch;
+      // Lifted again from the bottom. A lure that doesn't sink (floating or suspending) never gets there:
+      // it is lifted again after the pause, a floating one once it is back at the surface (as after a jerk)
+      const stalled=a.freeRate<=0 && s.phaseT>=(a.freeRate<0 && s.d>0.01 ? 3 : 1.4*ps);
+      if(s.d>=a.bottom-0.01 || stalled){ s.phase='go'; s.phaseT=0; }
+    }
   }
   else if(tech==='stopgo'){
     const G=2.2, T=G+1.0*ps, tc=s.t%T;
@@ -2762,7 +2806,7 @@ function drawPane(ctx,s,side,y0,ch){
   if(refOk){
     ctx.strokeStyle='rgba(245,158,11,0.8)'; ctx.lineWidth=2; ctx.setLineDash([6,5]); ctx.beginPath();
     let st=false;
-    for(const p of animRef.pts){ const x=toX(p.x); if(x<-20||x>cw+20){ st=false; continue; } const y=yOf(p); st?ctx.lineTo(x,y):ctx.moveTo(x,y); st=true; }
+    for(const p of (animGhost?animGhost.pts:animRef.pts)){ const x=toX(p.x); if(x<-20||x>cw+20){ st=false; continue; } const y=yOf(p); st?ctx.lineTo(x,y):ctx.moveTo(x,y); st=true; }
     ctx.stroke(); ctx.setLineDash([]);
   }
   // Trail: depth path (side) or sideways path (top)
@@ -2853,7 +2897,7 @@ function drawGraph(){
     g.fillStyle=r.c; g.textAlign='right'; g.fillText(r.val,W-6,top+h/2+4);
     if(r.ref && animRefOk()){
       g.strokeStyle='rgba(245,158,11,0.85)'; g.lineWidth=1.5; g.setLineDash([5,4]); g.beginPath(); let st=false;
-      for(const p of animRef.ser){ if(p.t<t0||p.t>t1) continue; const x=X(p.t), y=Y(r.f(p)); st?g.lineTo(x,y):g.moveTo(x,y); st=true; }
+      for(const p of (animGhost?animGhost.ser:animRef.ser)){ if(p.t<t0||p.t>t1) continue; const x=X(p.t), y=Y(r.f(p)); st?g.lineTo(x,y):g.moveTo(x,y); st=true; }
       g.stroke(); g.setLineDash([]);
     }
     g.strokeStyle=r.c; g.lineWidth=1.8; g.beginPath();
