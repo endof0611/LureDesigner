@@ -88,7 +88,7 @@ test('the recommendation does not change once applied', async ({ page }) => {
   const bad = await page.evaluate(() => {
     const out = [];
     for (const cat in PRESETS) for (const key in PRESETS[cat].items) for (const dens of [null, 0.3, 1.3]) for (const sp of [1, 3, 5]) {
-      applyPreset(cat, key); if (dens) setCtl('density', dens); document.getElementById('speedSlider').value = sp; calcPhysics();
+      applyPreset(cat, key); if (dens) setCtl('density', dens); setSpeed(sp); calcPhysics();
       const k = r => JSON.stringify([r.tech, r.speed, r.power, r.pause]), a = k(recommendAction()); applyRecommended();
       if (k(recommendAction()) !== a) out.push(PRESETS[cat].items[key].name + ' ' + dens + ' ' + sp);
     }

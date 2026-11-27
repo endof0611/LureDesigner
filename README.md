@@ -382,5 +382,6 @@
 | 입력 지원 | Pointer Events API (마우스, 터치, Apple Pencil, 핀치 줌) |
 | 반응형 | 768px 이하 모바일, 769~1024px 태블릿, 1025px 이상 데스크톱 |
 | 저장 | 브라우저 localStorage: 액션 미리보기 기준, 실측 보정 기록 |
+| 상태 | 설계값(밀도·무게·단면·립·파츠 크기·곡선 부드러움·립/대칭/비율 유지)은 `design`, 화면 설정(리트리브 속도·컨트롤 포인트·G/B 표시)은 `viewSet` 객체에 있음. 사이드바 컨트롤은 이 값을 보여 주고 사용자의 변경을 전달만 함 |
 | 히스토리 | 최대 40단계 실행취소 |
 | 테스트 | Playwright(Chromium) 회귀 테스트 `tests/`, `npm test`로 실행. PR과 `main` 푸시마다 GitHub Actions에서 자동 실행 ([tests/README.md](tests/README.md)) |

@@ -86,7 +86,7 @@ test('print button builds the drawing once; a lure too big for A4 gets A3 and a 
     let builds = 0; const orig = buildPrint; window.buildPrint = function () { builds++; return orig(); };
     window.print = () => window.dispatchEvent(new Event('beforeprint'));
     window.alert = m => { window._alert = m; };
-    applyPreset('biggame', 'rapido'); document.getElementById('lipToggle').checked = true; setCtl('lipLen', 80); setCtl('lipAng', 0);
+    applyPreset('biggame', 'rapido'); setCheck('lip', true); setCtl('lipLen', 80); setCtl('lipAng', 0);
     const s = document.getElementById('lenSlider'); s.value = 266; s.dispatchEvent(new Event('input', { bubbles: true }));
     printLure(); window.buildPrint = orig;
     return { builds, page: document.getElementById('printPage').textContent, alert: window._alert || '' };
@@ -100,7 +100,7 @@ test('SVG export: real size in mm, hairlines, well-formed for every preset', asy
   const res = await page.evaluate(() => {
     const out = [];
     for (const cat in PRESETS) for (const key in PRESETS[cat].items) {
-      applyPreset(cat, key); document.getElementById('lipToggle').checked = true; exportSVG();
+      applyPreset(cat, key); setCheck('lip', true); exportSVG();
       const t = document.getElementById('exportContent').value, doc = new DOMParser().parseFromString(t, 'image/svg+xml');
       const widths = [...t.matchAll(/stroke-width="([\d.]+)"/g)].map(m => +m[1]);
       out.push({ name: PRESETS[cat].items[key].name, head: t.split('\n')[0], parseError: !!doc.querySelector('parsererror'), maxStroke: Math.max(...widths), code: /class="design-code"/.test(t) });
