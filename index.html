@@ -1074,7 +1074,8 @@ function doRender() {
   renderPending=false;
   applySym();
   // Physics first (the CG/CB markers use it); skipped while dragging, onUp re-renders
-  if(physPending && dragView===null){ physPending=false; fitWeights(); syncWeightUI(); inRender=true; calcPhysics(); inRender=false; }
+  // A failure in the physics or its panels is logged but must not stop the views from being drawn
+  if(physPending && dragView===null){ physPending=false; fitWeights(); syncWeightUI(); inRender=true; try{ calcPhysics(); }catch(err){ console.error(err); } finally{ inRender=false; } }
   renderView('side');
   renderView('top');
   // Live size of the drawn outline in each view
@@ -1207,6 +1208,9 @@ function setupEvents() {
 
     // Unified Pointer Events (mouse + touch + pen)
     svg.addEventListener('pointerdown', function(e){
+      // Only the left mouse button edits: a right click (its menu) or a middle click must not add, delete or
+      // drag points (touch and pen report button 0)
+      if(e.pointerType==='mouse' && e.button!==0) return;
       e.preventDefault();
       // preventDefault keeps the focus where it was: release a sidebar control, or Delete / Backspace on a
       // selected part would go to it (and Backspace would edit a typed calibration value)
@@ -1233,6 +1237,9 @@ function setupEvents() {
 
     svg.addEventListener('pointermove', function(e){
       e.preventDefault();
+      // The button was released where the page didn't hear it (a menu or another window took the release):
+      // end the drag instead of letting the point follow a pointer whose button is up
+      if(e.pointerType==='mouse' && e.buttons===0 && pointers[e.pointerId]){ release(e); return; }
       if(pointers[e.pointerId]) pointers[e.pointerId]={x:e.clientX,y:e.clientY};
       const pIds=Object.keys(pointers);
 
@@ -1254,6 +1261,8 @@ function setupEvents() {
     };
     svg.addEventListener('pointerup', release);
     svg.addEventListener('pointercancel', release);
+    // Capture lost without a pointerup (e.g. the window lost focus mid-drag): end what that pointer was doing
+    svg.addEventListener('lostpointercapture', e=>{ if(pointers[e.pointerId]) release(e); });
 
     svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render(true);}, {passive:false});
   });
@@ -1295,7 +1304,7 @@ function setupEvents() {
         e.preventDefault();
       }
     }
-    if(e.key==='Escape') { selectedPart=null; render(true); }
+    if(e.key==='Escape') { document.getElementById('syncMenu').style.display='none'; selectedPart=null; render(true); } // also closes the size-sync menu
   });
 }
 
@@ -2080,7 +2089,14 @@ function actionText(a, tech) {
 const CAL_KEY='lureDesigner.calib';
 const CAL_NAMES={lipDepth:'립 잠행 깊이', pencilDive:'펜슬 저크 잠수', sink:'침강·부상 속도', wobble:'워블 주기', cast:'비거리'};
 let calib={on:true, samples:[]};
-try{ const c=JSON.parse(localStorage.getItem(CAL_KEY)); if(c && Array.isArray(c.samples)) calib={on:c.on!==false, samples:c.samples.filter(x=>x&&x.r)}; }catch(e){}
+// A stored record as calibAdd writes it. Anything else (edited by hand, another program) is dropped on load:
+// the panel would fail on it, and with the panel open that stopped the editor from redrawing.
+function calibSampleOk(x){
+  const num=v=>typeof v==='number'&&isFinite(v), opt=v=>v===null||v===undefined||num(v), obj=v=>!!v&&typeof v==='object';
+  return obj(x) && num(x.t) && typeof x.label==='string' && obj(x.r) && Object.keys(x.r).every(k=>k in CAL_NAMES && num(x.r[k]) && x.r[k]>0)
+    && obj(x.m) && opt(x.m.M) && opt(x.m.P) && obj(x.p) && num(x.p.M) && opt(x.p.pitch);
+}
+try{ const c=JSON.parse(localStorage.getItem(CAL_KEY)); if(c && Array.isArray(c.samples)) calib={on:c.on!==false, samples:c.samples.filter(calibSampleOk)}; }catch(e){}
 function calibSave(){ try{ localStorage.setItem(CAL_KEY,JSON.stringify(calib)); }catch(e){} }
 function calibFactors(){
   const f={};
@@ -2093,7 +2109,8 @@ function calibFactors(){
 // Measured values typed into the panel (NaN when empty)
 function calibInputs(){
   const v=id=>{ const e=document.getElementById(id); return e.disabled||e.value===''?NaN:parseFloat(e.value); };
-  return {M:v('calM'), P:v('calP')*parseFloat(document.getElementById('calPDir').value), V:v('calV'), D:v('calD'), W:v('calW'), C:v('calC')};
+  // Posture: the angle typed, signed only by the tail / head choice (a typed "-10" with "tail" is 10° tail-down)
+  return {M:v('calM'), P:Math.abs(v('calP'))*parseFloat(document.getElementById('calPDir').value), V:v('calV'), D:v('calD'), W:v('calW'), C:v('calC')};
 }
 function calibUI(){
   const panel=document.getElementById('calibPanel');
@@ -2126,7 +2143,7 @@ function calibUI(){
     if(x.m.M) items.push('무게 '+x.p.M.toFixed(1)+'→'+x.m.M+'g');
     if(!isNaN(x.m.P)&&x.m.P!==null) items.push('자세 '+(x.p.pitch===null?'-':x.p.pitch.toFixed(0))+'→'+x.m.P+'°');
     for(const k in x.r) items.push(CAL_NAMES[k]+' ×'+x.r[k].toFixed(2));
-    return '<div class="calib-row"><span><b>'+x.label+'</b> · '+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+items.join(' · ')+'</span><button title="삭제" onclick="calibDel('+i+')">✕</button></div>';
+    return '<div class="calib-row"><span><b>'+x.label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</b> · '+(d.getMonth()+1)+'/'+d.getDate()+'<br>'+items.join(' · ')+'</span><button title="삭제" onclick="calibDel('+i+')">✕</button></div>';
   }).join(''));
 }
 function calibAdd(){
