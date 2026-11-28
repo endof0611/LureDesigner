@@ -225,7 +225,7 @@
       <div class="panel-body">
       <div class="slider-group"><div class="slider-header"><span class="control-label">전체 길이 (mm)</span><span class="slider-value" id="lenVal">130</span></div>
         <input type="range" min="40" max="266" value="130" id="lenSlider" oninput="scaleLengthAll(this.value)" onchange="fitIfClipped()"></div>
-      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle" onchange="onCheck('prop',this,true)"><span class="toggle-slider"></span></label></div>
+      <div class="control-row"><span class="control-label">비율 유지 (높이·폭·무게)</span><label class="toggle"><input type="checkbox" id="propToggle" onchange="onCheck('prop',this)"><span class="toggle-slider"></span></label></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">측면 높이 (mm)</span><span class="slider-value" id="sideHVal">44</span></div>
         <input type="range" min="8" max="80" value="44" id="sideHSlider" oninput="scaleSideHeight(this.value)"></div>
       <div class="slider-group"><div class="slider-header"><span class="control-label">상면 너비 (mm)</span><span class="slider-value" id="topWVal">24</span></div>
@@ -599,7 +599,16 @@ const PRESETS={
 };
 let currentPreset={cat:'seabass', key:'minnow'};
 let presetViewCat='seabass';
-let presetDirty=false; // shape or lure settings changed since the preset was loaded
+// "(수정됨)": the lure differs from the preset as it was loaded (presetBase). Compared: outlines, parts,
+// weights (the position, mass and diameter asked for) and the design values except the proportional-scaling
+// mode. Worked out from the state rather than flagged by each edit, so an edit that changes nothing (a slider
+// moved and brought back, a weight pushed past its limit) or one undone by hand doesn't count.
+let presetBase=null;
+function lureKey() {
+  const d={...design}; delete d.prop;
+  return JSON.stringify([sidePts,topPts,eyes,hooks,lineEyes,weights.map(w=>[w.pos,w.gp??w.g,w.dp??w.d]),d]);
+}
+function isModified() { return presetBase!==null && lureKey()!==presetBase; }
 
 // === DESIGN STATE ===
 // The lure settings the sidebar edits live in `design`, not in the controls: the physics, drawing, print and
@@ -642,9 +651,9 @@ function onCtlInput(id, el) {
   if(id==='sectN'||id==='sectE') drawSection();
   render();
 }
-// The user flipped a design checkbox. keepDirty: an editing mode (proportional scaling), not a lure change.
-function onCheck(key, el, keepDirty) {
-  saveH(keepDirty); design[key]=el.checked;
+// The user flipped a design checkbox
+function onCheck(key, el) {
+  saveH(); design[key]=el.checked;
   if(key==='symSide'||key==='symTop'){ applySym(); syncSlidersFromPoints(); }
   render(key==='prop');
 }
@@ -665,13 +674,13 @@ function fitRange(s, v) {
   const keep=document.activeElement===s;
   s.min=Math.min(keep?+s.min:+s.dataset.min0,+v); s.max=Math.max(keep?+s.max:+s.dataset.max0,+v);
 }
-function ctlState() { return {d:{...design}, preset:{...currentPreset}, dirty:presetDirty}; }
+function ctlState() { return {d:{...design}, preset:{...currentPreset}, base:presetBase}; }
 // Returns true when the restored state belongs to a different preset
 function restoreCtl(st) {
   for(const id in CTL) setCtl(id,st.d[id]);
   for(const key in CHECKS) setCheck(key,st.d[key]);
   const changed=st.preset.cat!==currentPreset.cat||st.preset.key!==currentPreset.key;
-  currentPreset={...st.preset}; presetDirty=st.dirty;
+  currentPreset={...st.preset}; presetBase=st.base;
   if(changed){ presetViewCat=currentPreset.cat; updatePresetUI(); }
   return changed;
 }
@@ -752,16 +761,19 @@ function applyPreset(cat, key) {
   setCheck('symTop',true);
   setCheck('prop',p.prop);
 
-  currentPreset={cat,key}; presetViewCat=cat; presetDirty=false; updatePresetUI();
+  currentPreset={cat,key}; presetViewCat=cat; updatePresetUI();
   afterStateReplaced();
+  applySym(); presetBase=lureKey(); // the preset as loaded: the lure is "(수정됨)" once it differs from this
   resetView();
 }
 function loadPreset(cat, key) {
-  saveH(); applyPreset(cat,key);
+  // The preset already loaded and unchanged: nothing to reload, so no undo step (just fit the view again)
+  if(cat===currentPreset.cat && key===currentPreset.key && !isModified()) resetView();
+  else { saveH(); applyPreset(cat,key); }
   // On phones the sidebar covers the canvas; close it so the new shape is visible
   if(window.innerWidth<=768 && document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
 }
-function presetName() { return PRESETS[currentPreset.cat].items[currentPreset.key].name+(presetDirty?' (수정됨)':''); }
+function presetName() { return PRESETS[currentPreset.cat].items[currentPreset.key].name+(isModified()?' (수정됨)':''); }
 
 function showPresetCat(cat) { presetViewCat=cat; updatePresetUI(); }
 function updatePresetUI() {
@@ -804,15 +816,13 @@ function mapX(view,f) { (view==='side'?[sidePts,eyes,hooks,lineEyes]:[topPts]).f
 
 // === HISTORY ===
 function snapH() { return JSON.parse(JSON.stringify({s:sidePts,t:topPts,e:eyes,h:hooks,l:lineEyes,w:weights,ws:selWeight,c:ctlState()})); }
-// keepDirty: a step that doesn't change the lure itself (an editing mode), so the preset isn't marked modified
-function pushH(st, keepDirty) {
+function pushH(st) {
   undoStack.push(st);
   if(undoStack.length>MAX_HIST) undoStack.shift();
   lastSaveKey=null;
   if(!lenEditing) lenBase=null; // any other edit: the next length change scales from the values as they are then
-  if(!keepDirty) presetDirty=true; // every saved step precedes an edit (loading a preset clears it again)
 }
-function saveH(keepDirty) { pushH(snapH(), keepDirty); }
+function saveH() { pushH(snapH()); }
 // A canvas drag records its undo step (taken on pointer down) only once something actually moves
 function dragEdited() { if(pendingH){ pushH(pendingH); pendingH=null; } dragMoved=true; }
 // One undo step per continuous slider drag instead of one per input event
@@ -1319,17 +1329,6 @@ function setupEvents() {
 
     svg.addEventListener('wheel', e=>{e.preventDefault(); viewZoom=Math.max(0.3,Math.min(8,viewZoom*(e.deltaY>0?0.92:1.08))); render(true);}, {passive:false});
   });
-  const NOT_LURE=new Set(['showPtsToggle','speedSlider','cgToggle','propToggle',
-    'calM','calP','calPDir','calV','calD','calW','calC','calibToggle']);
-  // Sliders: 'input'. Checkboxes: 'change', which bubbles here after their own onchange (and its undo step)
-  const markDirty=e=>{ if(e.target.id && !NOT_LURE.has(e.target.id)){ presetDirty=true; render(true); } };
-  const sb=document.getElementById('sidebar');
-  sb.addEventListener('input', e=>{
-    if(e.target.type==='checkbox') return;
-    // (design sliders record their own undo step in onCtlInput, before the value changes)
-    markDirty(e);
-  });
-  sb.addEventListener('change', e=>{ if(e.target.type==='checkbox') markDirty(e); });
   window.addEventListener('resize', ()=>render(true));
   document.addEventListener('click', e=>{
     const wrap=document.getElementById('syncWrap');
@@ -1655,7 +1654,7 @@ function buildPrint() {
       '\n  <path d="M '+noseX+' 3.5 V '+h+' M 0 '+sideY+' H '+w+' M 0 '+topY+' H '+w+'" stroke="#555" stroke-width="0.2" fill="none"/>'+
       '\n  <text x="'+r2(noseX+2)+'" y="2.6" font-size="2.4" font-family="sans-serif" fill="#555">cm</text>\n  '+nums;
   }
-  const label=code+(presetDirty?' (수정됨)':'')+' · 실제 크기 (1:1)';
+  const label=code+(isModified()?' (수정됨)':'')+' · 실제 크기 (1:1)';
   // The page is as wide as the drawing, the label line or the "cm" unit right of the nose, whichever reaches
   // furthest (3.5 mm text: Latin ≈ 0.55 em, Hangul ≈ 1 em; "cm" ≈ 1.35 em of 2.4 mm). Without the unit's room it
   // fell off the page when nothing sticks out ahead of the nose (no line eye or lip there).
@@ -1991,13 +1990,19 @@ function selectWeight(i) { selWeight=i; syncWeightUI(); render(true); }
 // Slider edit of the selected weight: one undo step per drag
 function setWeightProp(k, v) {
   const w=weights[selWeight]; if(!w) return;
-  saveHGrouped('w'+k+selWeight);
-  const old=w[k]; w[k]=v;
-  if(k==='d') w.dp=v;
-  if(k==='g') w.gp=v;
-  // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge
-  if(k==='pos'){ w.pos=old; setWeightNote(moveWeight(w,v)?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>old?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤'); }
-  else { fitWeight(w); setWeightNote(weightNotes()); }
+  if(k==='pos'){
+    // A position the weight can't fit at (whatever its diameter) is refused: it stops at the body's edge.
+    // Worked out first, so a push past that edge, which moves nothing, records no undo step.
+    const t={...w}, ok=moveWeight(t,v);
+    if(t.pos!==w.pos){ saveHGrouped('wpos'+selWeight); w.pos=t.pos; }
+    setWeightNote(ok?'':'웨이트 '+(selWeight+1)+': 더 가면 '+(v>w.pos?'꼬리끝':'코끝')+'을 넘어서 '+w.pos+'%에서 멈춤');
+  } else {
+    saveHGrouped('w'+k+selWeight);
+    w[k]=v;
+    if(k==='d') w.dp=v;
+    if(k==='g') w.gp=v;
+    fitWeight(w); setWeightNote(weightNotes());
+  }
   syncWeightUI(); render(); // physics once per frame while a slider is dragged
 }
 function addWeight() {
@@ -2229,7 +2234,7 @@ function calibFitDensity(){
   if(!r || !(m.M>0)){ msg('먼저 실측 무게를 입력하세요.'); return; }
   const rho=Math.round((r.density+(m.M-r.M)/r.dMdRho)*100)/100;
   if(!(rho>=0.1 && rho<=2)){ msg('밀도 '+rho.toFixed(2)+'이 필요해 범위(0.10~2.00)를 벗어납니다. 웨이트·훅 무게를 먼저 확인하세요.'); return; }
-  saveH(); setCtl('density',rho); presetDirty=true; calcPhysics(); render();
+  saveH(); setCtl('density',rho); calcPhysics(); render();
   msg('소재 밀도를 '+r.density.toFixed(2)+' → '+rho.toFixed(2)+'로 바꿔 예측 무게를 '+lastPhys.raw.M.toFixed(1)+'g으로 맞췄습니다.');
 }
 

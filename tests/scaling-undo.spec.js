@@ -74,8 +74,9 @@ test('curve smoothness and the proportional toggle are part of undo; presets res
     const sl = document.getElementById('smoothSlider'); sl.value = 20; sl.dispatchEvent(new Event('input', { bubbles: true }));
     const a = SM; undoAction(); const b = [SM, document.getElementById('smoothVal').textContent];
     sl.value = 30; sl.dispatchEvent(new Event('input', { bubbles: true })); resetShape(); const c = SM;
-    applyPreset('seabass', 'minnow'); undoStack = []; addPart('eye'); presetDirty = false;
-    const el = document.getElementById('propToggle'); el.click(); const dirty = presetDirty, on = el.checked;
+    applyPreset('seabass', 'minnow'); undoStack = [];
+    const el = document.getElementById('propToggle'); el.click(); const dirty = isModified(); el.click();  // the mode alone is no lure change
+    undoStack = []; addPart('eye'); el.click(); const on = el.checked;
     undoAction(); return { a, b, c, dirty, on, off: !el.checked, eyes: eyes.length };
   });
   expect(r).toEqual({ a: 0.2, b: [1, '1.00'], c: 1, dirty: false, on: true, off: true, eyes: 2 });
