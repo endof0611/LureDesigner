@@ -12,9 +12,9 @@ for (const what of ['point', 'eye', 'weight']) {
     const xy = what === 'point' ? await pointOf(page, 'side', 5) : what === 'eye' ? await eyeXY(page) : await weightXY(page);
     const before = await state(page);
     await page.mouse.move(xy.x, xy.y); await page.mouse.down(); await page.mouse.move(xy.x + 1, xy.y + 1); await page.mouse.up();
-    expect(await page.evaluate(() => ({ n: undoStack.length, dirty: presetDirty }))).toEqual({ n: 0, dirty: false });
+    expect(await page.evaluate(() => ({ n: undoStack.length, dirty: isModified() }))).toEqual({ n: 0, dirty: false });
     await page.mouse.move(xy.x, xy.y); await page.mouse.down(); await page.mouse.move(xy.x - 25, xy.y + 4, { steps: 5 }); await page.mouse.up();
-    expect(await page.evaluate(() => ({ n: undoStack.length, dirty: presetDirty }))).toEqual({ n: 1, dirty: true });
+    expect(await page.evaluate(() => ({ n: undoStack.length, dirty: isModified() }))).toEqual({ n: 1, dirty: true });
     expect(await state(page)).not.toBe(before);
     await page.evaluate(() => undoAction());
     expect(await state(page)).toBe(before);
@@ -23,12 +23,13 @@ for (const what of ['point', 'eye', 'weight']) {
 
 test('"−" with nothing to remove and a size sync with nothing to sync leave no undo step', async ({ page }) => {
   const r = await page.evaluate(() => {
-    applyPreset('seabass', 'minnow'); undoStack = []; eyes = []; removePart('eye'); syncToSide(); syncToTop();
-    const quiet = { n: undoStack.length, dirty: presetDirty };
+    applyPreset('seabass', 'minnow'); undoStack = []; eyes = []; const before = isModified();
+    removePart('eye'); syncToSide(); syncToTop();
+    const quiet = { n: undoStack.length, same: isModified() === before };
     topPts.forEach(q => q.x *= 0.9); syncToSide();
     return { quiet, synced: { n: undoStack.length, same: Math.abs(xRange(topPts).mn - xRange(sidePts).mn) < 0.01 } };
   });
-  expect(r.quiet).toEqual({ n: 0, dirty: false });
+  expect(r.quiet).toEqual({ n: 0, same: true });
   expect(r.synced).toEqual({ n: 1, same: true });
 });
 
@@ -118,11 +119,11 @@ test('pinch zoom with a finger starting on a point moves nothing and records not
     svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; // synthetic touches have no real pointer to capture
     const P = q => ({ x: rc.left + o.cx + q.x * viewZoom, y: rc.top + o.cy + q.y * viewZoom });
     const ev = (type, id, x, y) => svg.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: id === 1 }));
-    undoStack = []; presetDirty = false; const before = JSON.stringify(sidePts), z0 = viewZoom, a = P(sidePts[5]);
+    undoStack = []; const before = JSON.stringify(sidePts), z0 = viewZoom, a = P(sidePts[5]);
     ev('pointerdown', 1, a.x, a.y); ev('pointermove', 1, a.x + 2, a.y + 1); ev('pointerdown', 2, a.x + 120, a.y);
     for (let k = 1; k <= 10; k++) { ev('pointermove', 2, a.x + 120 + k * 12, a.y); ev('pointermove', 1, a.x - k * 4, a.y); }
     ev('pointerup', 2, a.x + 240, a.y); for (let k = 1; k <= 5; k++) ev('pointermove', 1, a.x - 40 - k * 10, a.y + k * 3); ev('pointerup', 1, a.x - 90, a.y + 15);
-    return { zoomed: viewZoom / z0 > 1.3, moved: JSON.stringify(sidePts) !== before, undo: undoStack.length, dirty: presetDirty };
+    return { zoomed: viewZoom / z0 > 1.3, moved: JSON.stringify(sidePts) !== before, undo: undoStack.length, dirty: isModified() };
   });
   expect(r).toEqual({ zoomed: true, moved: false, undo: 0, dirty: false });
 });
@@ -140,11 +141,54 @@ test('view settings: control points, G / B markers and retrieve speed; not part 
   const slow = await (async () => { await page.evaluate(() => { const s = document.getElementById('speedSlider'); s.value = 1; s.dispatchEvent(new Event('input', { bubbles: true })); }); await frames(page); return depth(); })();
   const fast = await (async () => { await page.evaluate(() => { const s = document.getElementById('speedSlider'); s.value = 5; s.dispatchEvent(new Event('input', { bubbles: true })); }); await frames(page); return depth(); })();
   expect(fast).toBeGreaterThan(slow);
-  expect(await page.evaluate(() => [viewSet.speed, document.getElementById('speedVal').textContent, undoStack.length, presetDirty])).toEqual([5, '매우빠름', 0, false]);
+  expect(await page.evaluate(() => [viewSet.speed, document.getElementById('speedVal').textContent, undoStack.length, isModified()])).toEqual([5, '매우빠름', 0, false]);
   // an undo of a lure edit leaves the view settings alone
   await page.evaluate(() => { addPart('eye'); undoAction(); }); await frames(page);
   expect(await count()).toEqual({ pts: false, gb: 2 });
   expect(await page.evaluate(() => viewSet.speed)).toBe(5);
+});
+
+test('"(수정됨)" follows the lure, not the edits', async ({ page }) => {
+  const state = () => page.evaluate(() => ({ undo: undoStack.length, modified: isModified(), status: document.getElementById('statusInfo').textContent.split(' | ')[0] }));
+  await page.evaluate(() => { document.querySelectorAll('.panel.collapsed').forEach(x => x.classList.remove('collapsed')); applyPreset('seabass', 'minnow'); undoStack = []; });
+  // a point-count slider moved and brought back without letting go
+  await page.evaluate(() => { const s = document.getElementById('sidePtsSlider'), n = +s.value; for (const v of [n - 2, n - 4, n]) { s.value = v; s.dispatchEvent(new Event('input', { bubbles: true })); } s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await frames(page);
+  expect(await state()).toEqual({ undo: 0, modified: false, status: 'MN001' });
+  // a value changed and changed back by hand: two undo steps, but the lure is the preset again
+  for (const v of [0.6, 0.45]) { await page.evaluate(v => { lastSaveT = 0; const s = document.getElementById('densitySlider'); s.value = v; s.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frames(page); }
+  expect(await state()).toEqual({ undo: 2, modified: false, status: 'MN001' });
+  // the proportional-scaling mode is not a change of the lure
+  await page.evaluate(() => document.getElementById('propToggle').click()); await frames(page);
+  expect((await state()).modified).toBe(false);
+  // a weight pushed past the furthest it can go: nothing moves, no undo step
+  await page.evaluate(() => { applyPreset('biggame', 'aji'); setWeightProp('pos', 95); undoStack = []; lastSaveT = 0; });
+  const pos = await page.evaluate(() => weights[0].pos);
+  await page.evaluate(() => { const s = document.getElementById('weightPosSlider'); s.value = 95; s.dispatchEvent(new Event('input', { bubbles: true })); });
+  expect(await page.evaluate(() => [weights[0].pos, undoStack.length, document.getElementById('weightNote').textContent.includes('멈춤')])).toEqual([pos, 0, true]);
+});
+
+test('clicking the loaded preset: nothing when unchanged, a reset (with undo) after edits', async ({ page }) => {
+  await page.evaluate(() => { applyPreset('seabass', 'minnow'); undoStack = []; });
+  await page.evaluate(() => document.querySelector('.preset-btn.active').click());
+  expect(await page.evaluate(() => [undoStack.length, isModified()])).toEqual([0, false]);
+  await page.evaluate(() => { addPart('eye'); });
+  expect(await page.evaluate(() => isModified())).toBe(true);
+  await page.evaluate(() => document.querySelector('.preset-btn.active').click());
+  expect(await page.evaluate(() => [undoStack.length, isModified(), eyes.length])).toEqual([2, false, 1]);
+});
+
+test('undo across preset switches keeps "(수정됨)" right', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    applyPreset('seabass', 'minnow'); undoStack = [];
+    const out = [];
+    addPart('eye'); out.push(isModified());                       // MN001 edited
+    loadPreset('biggame', 'aji'); out.push(isModified());         // BG001 as loaded
+    undoAction(); out.push(currentPreset.key, isModified());      // back to the edited MN001
+    undoAction(); out.push(currentPreset.key, isModified());      // MN001 as loaded
+    return out;
+  });
+  expect(r).toEqual([true, false, 'minnow', true, 'minnow', false]);
 });
 
 test('the add-weight button is off at the 8-weight limit', async ({ page }) => {

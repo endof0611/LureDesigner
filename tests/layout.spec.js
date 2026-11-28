@@ -9,7 +9,7 @@ for (const width of [320, 360, 390, 800, 1024]) {
     await page.goto(APP);
     await page.waitForFunction(() => typeof lastPhys !== 'undefined' && lastPhys);
     const r = await page.evaluate(async () => {
-      applyPreset('biggame', 'type3'); document.getElementById('symSide').click(); presetDirty = true; render();
+      applyPreset('biggame', 'type3'); document.getElementById('symSide').click(); render(); // mirrors the outline: a long, "(수정됨)" status line
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const btns = [...document.querySelectorAll('.header-actions .btn')], last = btns[btns.length - 1].getBoundingClientRect();
       return { lastRight: last.right, vw: innerWidth, scrollW: document.documentElement.scrollWidth, info: document.getElementById('statusInfo').offsetHeight, bar: document.querySelector('.status-bar').offsetHeight };
